@@ -83,3 +83,7 @@ if __name__=="__main__":
 @app.route("/health")
 def health():
     return "OK",200
+
+resnet_model.load_state_dict(
+    load('./models/bt_resnet50_model.pt', map_location=DEVICE(device))
+)

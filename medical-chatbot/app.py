@@ -48,6 +48,10 @@ user_symptoms = set()
 
 app = Flask(__name__)
 
+@app.route("/health")
+def health():
+    return "OK", 200
+
 def get_symptom(sentence):
     sentence = nltk.word_tokenize(sentence)
     X = bag_of_words(sentence, all_words)
@@ -129,3 +133,5 @@ def predict_symptom():
         print("User symptoms:", user_symptoms)
 
     return jsonify(response_sentence.replace("_", " "))
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=False)
