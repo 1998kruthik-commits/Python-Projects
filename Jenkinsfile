@@ -2,10 +2,6 @@ pipeline {
 
     agent any
 
-    tools {
-        sonarQube 'SonarScanner'
-    }
-
     environment {
 
         GIT_URL = "https://github.com/1998kruthik-commits/Python-Projects.git"
