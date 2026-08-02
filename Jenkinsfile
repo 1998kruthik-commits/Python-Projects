@@ -32,23 +32,13 @@ pipeline {
             }
         }
 
-        stage('SonarQube Analysis') {
-            steps {
-
-                withSonarQubeEnv('sonarqube') {
-
-                    sh '''
-                    ${SONAR_SCANNER_HOME}/bin/sonar-scanner \
-                    -Dsonar.projectKey=PythonProjects \
-                    -Dsonar.projectName=PythonProjects \
-                    -Dsonar.sources=. \
-                    -Dsonar.python.version=3.12
-                    '''
-
-                }
-
-            }
+       stage('SonarQube Analysis') {
+    steps {
+        withSonarQubeEnv('sonarqube') {
+            sh 'mvn clean verify sonar:sonar'
         }
+    }
+}
 
         stage('Quality Gate') {
 
