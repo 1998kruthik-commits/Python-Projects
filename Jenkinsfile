@@ -2,6 +2,10 @@ pipeline {
 
     agent any
 
+    tools {
+        sonarQube 'SonarScanner'
+    }
+
     environment {
 
         GIT_URL = "https://github.com/1998kruthik-commits/Python-Projects.git"
@@ -26,6 +30,36 @@ pipeline {
                 git branch: 'main',
                     url: "${GIT_URL}"
             }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+
+                withSonarQubeEnv('sonarqube') {
+
+                    sh '''
+                    ${SONAR_SCANNER_HOME}/bin/sonar-scanner \
+                    -Dsonar.projectKey=PythonProjects \
+                    -Dsonar.projectName=PythonProjects \
+                    -Dsonar.sources=. \
+                    -Dsonar.python.version=3.12
+                    '''
+
+                }
+
+            }
+        }
+
+        stage('Quality Gate') {
+
+            steps {
+
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+
+            }
+
         }
 
         stage('Build Medical Chatbot') {
