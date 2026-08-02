@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Arrhythmia Classification</title>
+</head>
+
+<body>
+
+<h2>ECG Arrhythmia Prediction</h2>
+
+<form action="/predict" method="post">
+
+<textarea
+name="features"
+rows="15"
+cols="120"
+placeholder="Paste 279 comma separated values here"></textarea>
+
+<br><br>
+
+<input type="submit" value="Predict">
+
+</form>
+
+{% if prediction %}
+<h3>{{ prediction }}</h3>
+{% endif %}
+
+</body>
+</html>
