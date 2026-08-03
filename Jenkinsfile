@@ -6,10 +6,17 @@ pipeline {
 
         GIT_URL = "https://github.com/1998kruthik-commits/Python-Projects.git"
 
-        MEDICAL_IMAGE = "kruthikchethu/medical-chatbot:v1"
-        ARR_IMAGE     = "kruthikchethu/arrhythmia:v1"
+        // Docker Images
+        MEDICAL_IMAGE = "medical-chatbot:latest"
+        ARR_IMAGE     = "arrhythmia:latest"
 
-        DOCKER_CREDS = credentials('dockerhub')
+        // Container Names
+        MEDICAL_CONTAINER = "medical-chatbot"
+        ARR_CONTAINER     = "arrhythmia"
+
+        // Ports
+        MEDICAL_PORT = "5000"
+        ARR_PORT     = "5010"
     }
 
     stages {
@@ -30,23 +37,24 @@ pipeline {
         stage('Workspace Information') {
             steps {
                 sh '''
-                echo "Current Directory:"
+                echo "=================================="
+                echo "Workspace Information"
+                echo "=================================="
+
                 pwd
 
                 echo ""
-                echo "Repository Contents:"
                 ls -la
 
                 echo ""
-                echo "Available Projects:"
-                find . -maxdepth 1 -type d
+                echo "Projects:"
+                find . -maxdepth 2 -type d
                 '''
             }
         }
 
         stage('SonarQube Analysis') {
             steps {
-
                 script {
 
                     def scannerHome = tool 'SonarScanner'
@@ -58,19 +66,17 @@ pipeline {
                         -Dsonar.projectKey=PythonProjects \
                         -Dsonar.projectName=PythonProjects \
                         -Dsonar.sources=. \
-                        -Dsonar.sourceEncoding=UTF-8
+                        -Dsonar.sourceEncoding=UTF-8 \
+                        -Dsonar.python.version=3.12
                         """
-
                     }
-
                 }
-
             }
         }
 
         stage('Quality Gate') {
             steps {
-                timeout(time: 10, unit: 'MINUTES') {
+                timeout(time: 15, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
             }
@@ -82,13 +88,13 @@ pipeline {
                 dir('medical-chatbot') {
 
                     sh '''
-                    echo "Building Medical Chatbot Image..."
+                    echo "Building Medical Chatbot Docker Image..."
 
                     docker build -t ${MEDICAL_IMAGE} .
+
+                    docker images | grep medical-chatbot
                     '''
-
                 }
-
             }
         }
 
@@ -98,94 +104,108 @@ pipeline {
                 dir('Classification of Arrhythmia [ECG DATA]') {
 
                     sh '''
-                    echo "Building Arrhythmia Image..."
+                    echo "Building Arrhythmia Docker Image..."
 
                     docker build -t ${ARR_IMAGE} .
+
+                    docker images | grep arrhythmia
                     '''
-
                 }
-
             }
         }
 
-        stage('Docker Login') {
-
+        stage('Stop Existing Containers') {
             steps {
-
                 sh '''
-                echo ${DOCKER_CREDS_PSW} | docker login \
-                -u ${DOCKER_CREDS_USR} \
-                --password-stdin
+                docker stop ${MEDICAL_CONTAINER} || true
+                docker stop ${ARR_CONTAINER} || true
                 '''
-
             }
-
         }
 
-        stage('Push Docker Images') {
-
+        stage('Remove Existing Containers') {
             steps {
-
                 sh '''
-                docker push ${MEDICAL_IMAGE}
-
-                docker push ${ARR_IMAGE}
+                docker rm ${MEDICAL_CONTAINER} || true
+                docker rm ${ARR_CONTAINER} || true
                 '''
-
             }
-
         }
 
-        stage('Docker Logout') {
-
+        stage('Run Medical Chatbot Container') {
             steps {
-
                 sh '''
-                docker logout
+                echo "Starting Medical Chatbot..."
+
+                docker run -d \
+                --name ${MEDICAL_CONTAINER} \
+                -p ${MEDICAL_PORT}:${MEDICAL_PORT} \
+                ${MEDICAL_IMAGE}
                 '''
-
             }
+        }
 
+        stage('Run Arrhythmia Container') {
+            steps {
+                sh '''
+                echo "Starting Arrhythmia Application..."
+
+                docker run -d \
+                --name ${ARR_CONTAINER} \
+                -p ${ARR_PORT}:${ARR_PORT} \
+                ${ARR_IMAGE}
+                '''
+            }
+        }
+
+        stage('Health Check') {
+            steps {
+                sh '''
+                echo "Waiting for containers..."
+                sleep 20
+
+                echo ""
+                echo "Running Containers:"
+                docker ps
+
+                echo ""
+                echo "Medical Chatbot Check"
+                curl http://localhost:${MEDICAL_PORT} || true
+
+                echo ""
+                echo "Arrhythmia Check"
+                curl http://localhost:${ARR_PORT} || true
+                '''
+            }
         }
 
         stage('Cleanup') {
-
             steps {
-
                 sh '''
                 docker image prune -f
                 '''
-
             }
-
         }
-
     }
 
     post {
 
         success {
-
-            echo "========================================="
+            echo "======================================="
             echo "Pipeline Completed Successfully"
-            echo "========================================="
-
+            echo "Medical Chatbot : http://<VM-IP>:5000"
+            echo "Arrhythmia      : http://<VM-IP>:5010"
+            echo "======================================="
         }
 
         failure {
-
-            echo "========================================="
+            echo "======================================="
             echo "Pipeline Failed"
-            echo "========================================="
-
+            echo "======================================="
         }
 
         always {
-
             cleanWs()
-
         }
-
     }
-
 }
