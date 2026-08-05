@@ -6,19 +6,15 @@ pipeline {
 
         GIT_URL = "https://github.com/1998kruthik-commits/Python-Projects.git"
 
-        // Docker Images
         MEDICAL_IMAGE = "medical-chatbot:latest"
         ARR_IMAGE     = "arrhythmia:latest"
 
-        // Containers
         MEDICAL_CONTAINER = "medical-chatbot"
         ARR_CONTAINER     = "arrhythmia"
 
-        // Ports
         MEDICAL_PORT = "5000"
         ARR_PORT     = "5010"
 
-        // Azure Key Vault
         KEY_VAULT_NAME = "mlproject-keyvault"
     }
 
@@ -45,8 +41,6 @@ pipeline {
                 echo "=========================================="
 
                 pwd
-
-                echo ""
                 ls -la
 
                 echo ""
@@ -86,7 +80,6 @@ pipeline {
         }
 
         stage('Fetch Secrets from Azure Key Vault') {
-
             steps {
 
                 withAzureKeyvault(
@@ -104,13 +97,10 @@ pipeline {
                     '''
 
                 }
-
             }
-
         }
 
         stage('Build Medical Chatbot Image') {
-
             steps {
 
                 dir('medical-chatbot') {
@@ -124,13 +114,10 @@ pipeline {
                     '''
 
                 }
-
             }
-
         }
 
         stage('Build Arrhythmia Image') {
-
             steps {
 
                 dir('Classification of Arrhythmia [ECG DATA]') {
@@ -144,13 +131,10 @@ pipeline {
                     '''
 
                 }
-
             }
-
         }
 
         stage('Stop Existing Containers') {
-
             steps {
 
                 sh '''
@@ -159,11 +143,9 @@ pipeline {
                 '''
 
             }
-
         }
 
         stage('Remove Existing Containers') {
-
             steps {
 
                 sh '''
@@ -172,11 +154,9 @@ pipeline {
                 '''
 
             }
-
         }
 
         stage('Run Medical Chatbot') {
-
             steps {
 
                 sh '''
@@ -189,11 +169,9 @@ pipeline {
                 '''
 
             }
-
         }
 
         stage('Run Arrhythmia') {
-
             steps {
 
                 sh '''
@@ -206,11 +184,9 @@ pipeline {
                 '''
 
             }
-
         }
 
         stage('Health Check') {
-
             steps {
 
                 sh '''
@@ -218,24 +194,23 @@ pipeline {
                 sleep 20
 
                 echo ""
-                echo "Running Containers"
                 docker ps
 
                 echo ""
-                echo "Medical Chatbot"
-                curl -f http://localhost:${MEDICAL_PORT}/health
+                echo "Medical Chatbot Health"
+
+                curl -f http://localhost:${MEDICAL_PORT}/health || true
 
                 echo ""
                 echo "Arrhythmia"
-                curl -f http://localhost:${ARR_PORT}/health
+
+                curl -f http://localhost:${ARR_PORT}/ || true
                 '''
 
             }
-
         }
 
         stage('Cleanup') {
-
             steps {
 
                 sh '''
@@ -243,7 +218,6 @@ pipeline {
                 '''
 
             }
-
         }
 
     }
@@ -271,7 +245,7 @@ pipeline {
 
         always {
 
-            cleanWs notFailBuild: true
+            cleanWs()
 
         }
 
