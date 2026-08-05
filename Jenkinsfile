@@ -20,8 +20,6 @@ pipeline {
 
         // Azure Key Vault
         KEY_VAULT_NAME = "mlproject-keyvault"
-
-    
     }
 
     stages {
@@ -59,7 +57,6 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
-
                 script {
 
                     def scannerHome = tool 'SonarScanner'
@@ -82,39 +79,35 @@ pipeline {
 
         stage('Quality Gate') {
             steps {
-
                 timeout(time: 15, unit: 'MINUTES') {
-
                     waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        stage('Fetch Secrets from Azure Key Vault') {
+
+            steps {
+
+                withAzureKeyvault(
+                    azureKeyVaultSecrets: [
+                        [
+                            secretType: 'Secret',
+                            name: 'storage-connection-string',
+                            envVariable: 'AZURE_STORAGE_CONNECTION_STRING'
+                        ]
+                    ]
+                ) {
+
+                    sh '''
+                    echo "Azure Key Vault Secret Loaded Successfully"
+                    '''
 
                 }
 
             }
-        }
-        stage('Fetch Secrets from Azure Key Vault') {
-
-    steps {
-
-       withAzureKeyvault(
-    azureKeyVaultSecrets: [
-        [
-            secretType: 'Secret',
-            name: 'storage-connection-string',
-            envVariable: 'AZURE_STORAGE_CONNECTION_STRING'
-        ]
-    ]
-) 
-        {
-
-            sh '''
-            echo "Application Insights Secret Loaded Successfully"
-            '''
 
         }
-
-    }
-
-}
 
         stage('Build Medical Chatbot Image') {
 
@@ -161,10 +154,8 @@ pipeline {
             steps {
 
                 sh '''
-
                 docker stop ${MEDICAL_CONTAINER} || true
                 docker stop ${ARR_CONTAINER} || true
-
                 '''
 
             }
@@ -176,10 +167,8 @@ pipeline {
             steps {
 
                 sh '''
-
                 docker rm ${MEDICAL_CONTAINER} || true
                 docker rm ${ARR_CONTAINER} || true
-
                 '''
 
             }
@@ -191,15 +180,12 @@ pipeline {
             steps {
 
                 sh '''
-
                 docker run -d \
-                --name ${MEDICAL_CONTAINER} \
-                -p ${MEDICAL_PORT}:${MEDICAL_PORT} \
-                -e AZURE_STORAGE_CONNECTION_STRING="${AZURE_STORAGE_CONNECTION_STRING}" \
-                -e KEY_VAULT_NAME="${KEY_VAULT_NAME}" \
-                -e APPLICATIONINSIGHTS_CONNECTION_STRING="${APPLICATIONINSIGHTS_CONNECTION_STRING}" \
-                ${MEDICAL_IMAGE}
-
+                  --name ${MEDICAL_CONTAINER} \
+                  -p ${MEDICAL_PORT}:${MEDICAL_PORT} \
+                  -e AZURE_STORAGE_CONNECTION_STRING="${AZURE_STORAGE_CONNECTION_STRING}" \
+                  -e KEY_VAULT_NAME="${KEY_VAULT_NAME}" \
+                  ${MEDICAL_IMAGE}
                 '''
 
             }
@@ -211,14 +197,12 @@ pipeline {
             steps {
 
                 sh '''
-
                 docker run -d \
-                --name ${ARR_CONTAINER} \
-                -p ${ARR_PORT}:${ARR_PORT} \
-                -e AZURE_STORAGE_CONNECTION_STRING="${AZURE_STORAGE_CONNECTION_STRING}" \
-                -e KEY_VAULT_NAME="${KEY_VAULT_NAME}" \
-                ${ARR_IMAGE}
-
+                  --name ${ARR_CONTAINER} \
+                  -p ${ARR_PORT}:${ARR_PORT} \
+                  -e AZURE_STORAGE_CONNECTION_STRING="${AZURE_STORAGE_CONNECTION_STRING}" \
+                  -e KEY_VAULT_NAME="${KEY_VAULT_NAME}" \
+                  ${ARR_IMAGE}
                 '''
 
             }
@@ -230,26 +214,20 @@ pipeline {
             steps {
 
                 sh '''
-
                 echo "Waiting for applications..."
-
                 sleep 20
 
                 echo ""
                 echo "Running Containers"
-
                 docker ps
 
                 echo ""
                 echo "Medical Chatbot"
-
                 curl -f http://localhost:${MEDICAL_PORT}/health
 
                 echo ""
                 echo "Arrhythmia"
-
                 curl -f http://localhost:${ARR_PORT}/health
-
                 '''
 
             }
@@ -261,9 +239,7 @@ pipeline {
             steps {
 
                 sh '''
-
                 docker image prune -f
-
                 '''
 
             }
@@ -293,12 +269,12 @@ pipeline {
 
         }
 
-      always {
-    script {
-        if (env.WORKSPACE) {
-            cleanWs()
+        always {
+
+            cleanWs notFailBuild: true
+
         }
+
     }
-      }
-    }
+
 }
