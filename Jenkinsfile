@@ -18,9 +18,6 @@ pipeline {
         MEDICAL_PORT = "5000"
         ARR_PORT     = "5010"
 
-        // Azure Storage
-        AZURE_STORAGE_CONNECTION_STRING = credentials('AZURE_STORAGE_CONNECTION_STRING')
-
         // Azure Key Vault
         KEY_VAULT_NAME = "ml-keyvault"
 
@@ -105,8 +102,14 @@ pipeline {
                     name: 'APPLICATIONINSIGHTS-CONNECTION-STRING',
                     envVariable: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
                 ]
+                [
+                    secretType: 'Secret',
+                    name: 'APPLICATIONINSIGHTS_CONNECTION_STRING',
+                    envVariable: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+                ]
             ]
-        ) 
+            
+         
         {
 
             sh '''
@@ -297,12 +300,10 @@ pipeline {
 
         }
 
-        always {
-
+      always {
+    script {
+        if (env.WORKSPACE) {
             cleanWs()
-
         }
-
     }
-
 }
