@@ -24,8 +24,7 @@ pipeline {
         // Azure Key Vault
         KEY_VAULT_NAME = "ml-keyvault"
 
-        // Azure Application Insights
-        APPLICATIONINSIGHTS_CONNECTION_STRING = credentials('APPLICATIONINSIGHTS_CONNECTION_STRING')
+    
     }
 
     stages {
@@ -95,6 +94,30 @@ pipeline {
 
             }
         }
+        stage('Fetch Secrets from Azure Key Vault') {
+
+    steps {
+
+        withAzureKeyvault(
+            azureKeyVaultSecrets: [
+                [
+                    secretType: 'Secret',
+                    name: 'APPLICATIONINSIGHTS-CONNECTION-STRING',
+                    envVariable: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+                ]
+            ]
+        ) 
+        {
+
+            sh '''
+            echo "Application Insights Secret Loaded Successfully"
+            '''
+
+        }
+
+    }
+
+}
 
         stage('Build Medical Chatbot Image') {
 
