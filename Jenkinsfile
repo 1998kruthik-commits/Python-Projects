@@ -10,13 +10,22 @@ pipeline {
         MEDICAL_IMAGE = "medical-chatbot:latest"
         ARR_IMAGE     = "arrhythmia:latest"
 
-        // Container Names
+        // Containers
         MEDICAL_CONTAINER = "medical-chatbot"
         ARR_CONTAINER     = "arrhythmia"
 
         // Ports
         MEDICAL_PORT = "5000"
         ARR_PORT     = "5010"
+
+        // Azure Storage
+        AZURE_STORAGE_CONNECTION_STRING = credentials('AZURE_STORAGE_CONNECTION_STRING')
+
+        // Azure Key Vault
+        KEY_VAULT_NAME = "ml-keyvault"
+
+        // Azure Application Insights
+        APPLICATIONINSIGHTS_CONNECTION_STRING = credentials('APPLICATIONINSIGHTS_CONNECTION_STRING')
     }
 
     stages {
@@ -37,9 +46,9 @@ pipeline {
         stage('Workspace Information') {
             steps {
                 sh '''
-                echo "=================================="
+                echo "=========================================="
                 echo "Workspace Information"
-                echo "=================================="
+                echo "=========================================="
 
                 pwd
 
@@ -47,7 +56,6 @@ pipeline {
                 ls -la
 
                 echo ""
-                echo "Projects:"
                 find . -maxdepth 2 -type d
                 '''
             }
@@ -55,6 +63,7 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
+
                 script {
 
                     def scannerHome = tool 'SonarScanner'
@@ -69,6 +78,7 @@ pipeline {
                         -Dsonar.sourceEncoding=UTF-8 \
                         -Dsonar.python.version=3.12
                         """
+
                     }
                 }
             }
@@ -76,136 +86,200 @@ pipeline {
 
         stage('Quality Gate') {
             steps {
+
                 timeout(time: 15, unit: 'MINUTES') {
+
                     waitForQualityGate abortPipeline: true
+
                 }
+
             }
         }
 
         stage('Build Medical Chatbot Image') {
+
             steps {
 
                 dir('medical-chatbot') {
 
                     sh '''
-                    echo "Building Medical Chatbot Docker Image..."
+                    echo "Building Medical Chatbot Image"
 
                     docker build -t ${MEDICAL_IMAGE} .
 
                     docker images | grep medical-chatbot
                     '''
+
                 }
+
             }
+
         }
 
         stage('Build Arrhythmia Image') {
+
             steps {
 
                 dir('Classification of Arrhythmia [ECG DATA]') {
 
                     sh '''
-                    echo "Building Arrhythmia Docker Image..."
+                    echo "Building Arrhythmia Image"
 
                     docker build -t ${ARR_IMAGE} .
 
                     docker images | grep arrhythmia
                     '''
+
                 }
+
             }
+
         }
 
         stage('Stop Existing Containers') {
+
             steps {
+
                 sh '''
+
                 docker stop ${MEDICAL_CONTAINER} || true
                 docker stop ${ARR_CONTAINER} || true
+
                 '''
+
             }
+
         }
 
         stage('Remove Existing Containers') {
+
             steps {
+
                 sh '''
+
                 docker rm ${MEDICAL_CONTAINER} || true
                 docker rm ${ARR_CONTAINER} || true
+
                 '''
+
             }
+
         }
 
-        stage('Run Medical Chatbot Container') {
+        stage('Run Medical Chatbot') {
+
             steps {
+
                 sh '''
-                echo "Starting Medical Chatbot..."
 
                 docker run -d \
                 --name ${MEDICAL_CONTAINER} \
                 -p ${MEDICAL_PORT}:${MEDICAL_PORT} \
+                -e AZURE_STORAGE_CONNECTION_STRING="${AZURE_STORAGE_CONNECTION_STRING}" \
+                -e KEY_VAULT_NAME="${KEY_VAULT_NAME}" \
+                -e APPLICATIONINSIGHTS_CONNECTION_STRING="${APPLICATIONINSIGHTS_CONNECTION_STRING}" \
                 ${MEDICAL_IMAGE}
+
                 '''
+
             }
+
         }
 
-        stage('Run Arrhythmia Container') {
+        stage('Run Arrhythmia') {
+
             steps {
+
                 sh '''
-                echo "Starting Arrhythmia Application..."
 
                 docker run -d \
                 --name ${ARR_CONTAINER} \
                 -p ${ARR_PORT}:${ARR_PORT} \
+                -e AZURE_STORAGE_CONNECTION_STRING="${AZURE_STORAGE_CONNECTION_STRING}" \
+                -e KEY_VAULT_NAME="${KEY_VAULT_NAME}" \
+                -e APPLICATIONINSIGHTS_CONNECTION_STRING="${APPLICATIONINSIGHTS_CONNECTION_STRING}" \
                 ${ARR_IMAGE}
+
                 '''
+
             }
+
         }
 
         stage('Health Check') {
+
             steps {
+
                 sh '''
-                echo "Waiting for containers..."
+
+                echo "Waiting for applications..."
+
                 sleep 20
 
                 echo ""
-                echo "Running Containers:"
+                echo "Running Containers"
+
                 docker ps
 
                 echo ""
-                echo "Medical Chatbot Check"
-                curl http://localhost:${MEDICAL_PORT} || true
+                echo "Medical Chatbot"
+
+                curl -f http://localhost:${MEDICAL_PORT}/health
 
                 echo ""
-                echo "Arrhythmia Check"
-                curl http://localhost:${ARR_PORT} || true
+                echo "Arrhythmia"
+
+                curl -f http://localhost:${ARR_PORT}/health
+
                 '''
+
             }
+
         }
 
         stage('Cleanup') {
+
             steps {
+
                 sh '''
+
                 docker image prune -f
+
                 '''
+
             }
+
         }
+
     }
 
     post {
 
         success {
-            echo "======================================="
+
+            echo "========================================="
             echo "Pipeline Completed Successfully"
+            echo "========================================="
+
             echo "Medical Chatbot : http://<VM-IP>:5000"
             echo "Arrhythmia      : http://<VM-IP>:5010"
-            echo "======================================="
+
         }
 
         failure {
-            echo "======================================="
+
+            echo "========================================="
             echo "Pipeline Failed"
-            echo "======================================="
+            echo "========================================="
+
         }
 
         always {
+
             cleanWs()
+
         }
+
     }
+
 }
