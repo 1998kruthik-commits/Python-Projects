@@ -80,25 +80,24 @@ pipeline {
         }
 
         stage('Fetch Secrets from Azure Key Vault') {
-            steps {
-
-                withAzureKeyvault(
-                    azureKeyVaultSecrets: [
-                        [
-                            secretType: 'Secret',
-                            name: 'storage-connection-string',
-                            envVariable: 'AZURE_STORAGE_CONNECTION_STRING'
-                        ]
-                    ]
-                ) {
-
-                    sh '''
-                    echo "Azure Key Vault Secret Loaded Successfully"
-                    '''
-
-                }
-            }
+    steps {
+        withAzureKeyvault(
+            credentialID: 'azure-sp',
+            keyVaultURL: 'https://mlproject-keyvault.vault.azure.net/',
+            azureKeyVaultSecrets: [
+                [
+                    secretType: 'Secret',
+                    name: 'storage-connection-string',
+                    envVariable: 'AZURE_STORAGE_CONNECTION_STRING'
+                ]
+            ]
+        ) {
+            sh '''
+            echo "Secret Loaded Successfully"
+            '''
         }
+    }
+}
 
         stage('Build Medical Chatbot Image') {
             steps {
