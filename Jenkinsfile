@@ -217,7 +217,6 @@ pipeline {
                 -p ${ARR_PORT}:${ARR_PORT} \
                 -e AZURE_STORAGE_CONNECTION_STRING="${AZURE_STORAGE_CONNECTION_STRING}" \
                 -e KEY_VAULT_NAME="${KEY_VAULT_NAME}" \
-                -e APPLICATIONINSIGHTS_CONNECTION_STRING="${APPLICATIONINSIGHTS_CONNECTION_STRING}" \
                 ${ARR_IMAGE}
 
                 '''
@@ -300,5 +299,6 @@ pipeline {
             cleanWs()
         }
     }
-}
+      }
     }
+}
