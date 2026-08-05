@@ -19,7 +19,7 @@ pipeline {
         ARR_PORT     = "5010"
 
         // Azure Key Vault
-        KEY_VAULT_NAME = "ml-keyvault"
+        KEY_VAULT_NAME = "mlproject-keyvault"
 
     
     }
@@ -95,21 +95,15 @@ pipeline {
 
     steps {
 
-        withAzureKeyvault(
-            azureKeyVaultSecrets: [
-                [
-                    secretType: 'Secret',
-                    name: 'APPLICATIONINSIGHTS-CONNECTION-STRING',
-                    envVariable: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
-                ]
-                [
-                    secretType: 'Secret',
-                    name: 'APPLICATIONINSIGHTS_CONNECTION_STRING',
-                    envVariable: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
-                ]
-            ]
-            
-         
+       withAzureKeyvault(
+    azureKeyVaultSecrets: [
+        [
+            secretType: 'Secret',
+            name: 'storage-connection-string',
+            envVariable: 'AZURE_STORAGE_CONNECTION_STRING'
+        ]
+    ]
+) 
         {
 
             sh '''
