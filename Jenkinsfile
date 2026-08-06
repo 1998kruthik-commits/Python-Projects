@@ -145,29 +145,23 @@ pipeline {
         }
 
         stage('Login to Azure') {
-            steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'azure-sp-jenkins',
-                        usernameVariable: 'AZURE_CLIENT_ID',
-                        passwordVariable: 'AZURE_CLIENT_SECRET'
-                    ),
-                    string(
-                        credentialsId: 'azure-tenant-id',
-                        variable: 'AZURE_TENANT_ID'
-                    )
-                ]) {
-                    sh '''
-                    az login --service-principal \
-                    -u $AZURE_CLIENT_ID \
-                    -p $AZURE_CLIENT_SECRET \
-                    --tenant $AZURE_TENANT_ID
+    steps {
+        withCredentials([
+            azureServicePrincipal('azure-sp-jenkins'),
+            string(credentialsId: 'azure-tenant-id', variable: 'AZURE_TENANT_ID')
+        ]) {
+            sh '''
+            az login --service-principal \
+            -u $AZURE_CLIENT_ID \
+            -p $AZURE_CLIENT_SECRET \
+            --tenant $AZURE_TENANT_ID
 
-                    az account set --subscription $SUBSCRIPTION_ID
-                    '''
-                }
-            }
+            az account set --subscription $SUBSCRIPTION_ID
+            az account show
+            '''
         }
+    }
+}
 
         stage('Get AKS Credentials') {
             steps {
