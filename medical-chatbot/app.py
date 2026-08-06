@@ -41,7 +41,7 @@ symptom_severity = symptom_severity.applymap(lambda s: s.lower().strip(" ").repl
 with open('data/list_of_symptoms.pickle', 'rb') as data_file:
     symptoms_list = pickle.load(data_file)
 
-with open('models/fitted_model.pickle2', 'rb') as modelFile:
+with open('models/fitted_model.pickle', 'rb') as modelFile:
     prediction_model = pickle.load(modelFile)
 
 user_symptoms = set()
