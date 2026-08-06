@@ -99,6 +99,10 @@ pipeline {
         }
     }
 }
+        stage('Build Docker Images') {
+
+    parallel {
+
         stage('Build Medical Chatbot Image') {
             steps {
 
@@ -113,6 +117,7 @@ pipeline {
                     '''
 
                 }
+
             }
         }
 
@@ -130,8 +135,12 @@ pipeline {
                     '''
 
                 }
+
             }
         }
+
+    }
+}
 
         stage('Stop Existing Containers') {
             steps {
