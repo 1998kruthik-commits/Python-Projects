@@ -91,7 +91,7 @@ pipeline {
 
                 withAzureKeyvault(
 
-                    credentialIDOverride:'azure-sp',
+                    credentialIDOverride:'azure-sp-jenkins',
 
                     keyVaultURLOverride:'https://mlproject-keyvault.vault.azure.net/',
 
@@ -207,43 +207,31 @@ pipeline {
         }
 
         stage('Login to Azure') {
+    steps {
+        withCredentials([
+            usernamePassword(
+                credentialsId:'azure-sp-jenkins',
+                usernameVariable:'AZURE_CLIENT_ID',
+                passwordVariable:'AZURE_CLIENT_SECRET'
+            ),
+            string(
+                credentialsId:'azure-tenant-id',
+                variable:'AZURE_TENANT_ID'
+            )
+        ]) {
+            sh '''
+            az login --service-principal \
+            -u $AZURE_CLIENT_ID \
+            -p $AZURE_CLIENT_SECRET \
+            --tenant $AZURE_TENANT_ID
 
-            steps {
+            az account set --subscription 34223793-8b41-4434-a686-438e9f0dc8df
 
-                withCredentials([
-
-                    usernamePassword(
-
-                        credentialsId:'azure-sp-jenkins',
-
-                        usernameVariable:'AZURE_CLIENT_ID',
-
-                        passwordVariable:'AZURE_CLIENT_SECRET'
-
-                    ),
-
-                    string(
-
-                        credentialsId:'azure-tenant-id',
-
-                        variable:'AZURE_TENANT_ID'
-
-                    )
-
-                ]) {
-
-                    sh '''
-                    az login --service-principal \
-                    -u $AZURE_CLIENT_ID \
-                    -p $AZURE_CLIENT_SECRET \
-                    --tenant $AZURE_TENANT_ID
-                    '''
-
-                }
-
-            }
-
+            az account show
+            '''
         }
+    }
+}
 
         stage('Get AKS Credentials') {
 
