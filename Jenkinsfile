@@ -20,12 +20,15 @@ pipeline {
     stages {
 
         stage('Clean Workspace') {
-            steps { deleteDir() }
+            steps {
+                deleteDir()
+            }
         }
 
-        stage('Clone Repository') {
+        // ✅ Use Jenkins built-in SCM checkout (NO manual git clone needed)
+        stage('Checkout Code') {
             steps {
-                git branch: 'main', url: "${GIT_URL}"
+                checkout scm
             }
         }
 
@@ -56,57 +59,39 @@ pipeline {
             }
         }
 
+        // ✅ FAIL pipeline if quality gate fails
         stage('Quality Gate') {
             steps {
-                timeout(time:15, unit:'MINUTES') {
-                    waitForQualityGate abortPipeline:false
+                timeout(time: 15, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
                 }
             }
         }
 
-        // 🔐 LOGIN FIRST (important for KeyVault)
-        stage('Login to Azure') {
+        // ✅ Fetch AND USE secret
+        stage('Fetch Secrets from Azure Key Vault') {
             steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId:'azure-sp-jenkins',
-                        usernameVariable:'AZURE_CLIENT_ID',
-                        passwordVariable:'AZURE_CLIENT_SECRET'
-                    ),
-                    string(
-                        credentialsId:'azure-tenant-id',
-                        variable:'AZURE_TENANT_ID'
-                    )
-                ]) {
+                withAzureKeyvault(
+                    credentialIDOverride: 'azure-sp-jenkins',
+                    keyVaultURLOverride: 'https://mlproject-keyvault.vault.azure.net/',
+                    azureKeyVaultSecrets: [
+                        [
+                            secretType: 'Secret',
+                            name: 'storage-connection-string',
+                            envVariable: 'AZURE_STORAGE_CONNECTION_STRING'
+                        ]
+                    ]
+                ) {
                     sh '''
-                    echo "Logging into Azure..."
-                    az login --service-principal \
-                      -u $AZURE_CLIENT_ID \
-                      -p $AZURE_CLIENT_SECRET \
-                      --tenant $AZURE_TENANT_ID
-
-                    az account set --subscription ${SUBSCRIPTION_ID}
-
-                    echo "Azure Account Info:"
-                    az account show
+                    echo "KeyVault Secret Loaded"
+                    
+                    # Example usage (DON'T print in real production)
+                    if [ -z "$AZURE_STORAGE_CONNECTION_STRING" ]; then
+                        echo "Secret not loaded!"
+                        exit 1
+                    fi
                     '''
                 }
-            }
-        }
-
-        // 🔑 FETCH SECRET USING AZ CLI (more reliable than plugin)
-        stage('Fetch Secrets from Key Vault') {
-            steps {
-                sh '''
-                echo "Fetching secret from Key Vault..."
-
-                export AZURE_STORAGE_CONNECTION_STRING=$(az keyvault secret show \
-                  --vault-name ${KEY_VAULT_NAME} \
-                  --name storage-connection-string \
-                  --query value -o tsv)
-
-                echo "Secret fetched successfully"
-                '''
             }
         }
 
@@ -124,11 +109,10 @@ pipeline {
                 stage('Arrhythmia') {
                     steps {
                         dir('Classification of Arrhythmia [ECG DATA]') {
-                            sh 'docker build -t "${ARR_IMAGE}" .'
+                            sh 'docker build -t ${ARR_IMAGE} .'
                         }
                     }
                 }
-
             }
         }
 
@@ -136,13 +120,14 @@ pipeline {
             steps {
                 withCredentials([
                     usernamePassword(
-                        credentialsId:'dockerhub-creds',
-                        usernameVariable:'DOCKER_USER',
-                        passwordVariable:'DOCKER_PASS'
+                        credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
                     )
                 ]) {
                     sh '''
                     echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                    
                     docker push ${MEDICAL_IMAGE}
                     docker push ${ARR_IMAGE}
                     '''
@@ -159,13 +144,38 @@ pipeline {
             }
         }
 
+        stage('Login to Azure') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'azure-sp-jenkins',
+                        usernameVariable: 'AZURE_CLIENT_ID',
+                        passwordVariable: 'AZURE_CLIENT_SECRET'
+                    ),
+                    string(
+                        credentialsId: 'azure-tenant-id',
+                        variable: 'AZURE_TENANT_ID'
+                    )
+                ]) {
+                    sh '''
+                    az login --service-principal \
+                    -u $AZURE_CLIENT_ID \
+                    -p $AZURE_CLIENT_SECRET \
+                    --tenant $AZURE_TENANT_ID
+
+                    az account set --subscription $SUBSCRIPTION_ID
+                    '''
+                }
+            }
+        }
+
         stage('Get AKS Credentials') {
             steps {
                 sh '''
                 az aks get-credentials \
-                  --resource-group ${RESOURCE_GROUP} \
-                  --name ${AKS_NAME} \
-                  --overwrite-existing
+                --resource-group ${RESOURCE_GROUP} \
+                --name ${AKS_NAME} \
+                --overwrite-existing
                 '''
             }
         }
@@ -196,18 +206,17 @@ pipeline {
                 echo "Medical Chatbot IP: $MEDICAL_IP"
                 echo "Arrhythmia IP: $ARR_IP"
 
-                curl http://$MEDICAL_IP/health || true
-                curl http://$ARR_IP/health || true
+                curl -f http://$MEDICAL_IP/health || echo "Medical health check failed"
+                curl -f http://$ARR_IP/health || echo "Arrhythmia health check failed"
                 '''
             }
         }
-
     }
 
     post {
 
         success {
-            echo "✅ Pipeline Completed Successfully"
+            echo "Pipeline Completed Successfully"
             sh '''
             kubectl get pods
             kubectl get svc
@@ -215,7 +224,7 @@ pipeline {
         }
 
         failure {
-            echo "❌ Pipeline Failed"
+            echo "Pipeline Failed"
         }
 
         always {
