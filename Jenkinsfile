@@ -82,8 +82,8 @@ pipeline {
         stage('Fetch Secrets from Azure Key Vault') {
     steps {
         withAzureKeyvault(
-            credentialID: 'azure-sp',
-            keyVaultURL: 'https://mlproject-keyvault.vault.azure.net/',
+            credentialIDOverride: 'azure-sp',
+            keyVaultURLOverride: 'https://mlproject-keyvault.vault.azure.net/',
             azureKeyVaultSecrets: [
                 [
                     secretType: 'Secret',
@@ -93,12 +93,12 @@ pipeline {
             ]
         ) {
             sh '''
-            echo "Secret Loaded Successfully"
+                echo "Secret Loaded Successfully"
+                echo $AZURE_STORAGE_CONNECTION_STRING
             '''
         }
     }
 }
-
         stage('Build Medical Chatbot Image') {
             steps {
 
