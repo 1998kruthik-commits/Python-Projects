@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: medical-chatbot
+
+spec:
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app: medical-chatbot
+
+  template:
+    metadata:
+      labels:
+        app: medical-chatbot
+
+    spec:
+      containers:
+      - name: medical-chatbot
+
+        image: kruthikchethu/medical-chatbot:latest
+
+        imagePullPolicy: Always
+
+        ports:
+        - containerPort: 5000
