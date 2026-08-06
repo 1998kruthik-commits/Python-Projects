@@ -6,16 +6,18 @@ pipeline {
 
         GIT_URL = "https://github.com/1998kruthik-commits/Python-Projects.git"
 
-        MEDICAL_IMAGE = "medical-chatbot:latest"
-        ARR_IMAGE     = "arrhythmia:latest"
+        DOCKER_REPO = "kruthikchethu"
 
-        MEDICAL_CONTAINER = "medical-chatbot"
-        ARR_CONTAINER     = "arrhythmia"
+        BUILD_TAG = "${BUILD_NUMBER}"
 
-        MEDICAL_PORT = "5000"
-        ARR_PORT     = "5010"
+        MEDICAL_IMAGE = "${DOCKER_REPO}/medical-chatbot:${BUILD_TAG}"
+        ARR_IMAGE     = "${DOCKER_REPO}/arrhythmia:${BUILD_TAG}"
+
+        RESOURCE_GROUP = "Team_zanskar"
+        AKS_NAME       = "MLProject-AKS"
 
         KEY_VAULT_NAME = "mlproject-keyvault"
+
     }
 
     stages {
@@ -36,21 +38,16 @@ pipeline {
         stage('Workspace Information') {
             steps {
                 sh '''
-                echo "=========================================="
-                echo "Workspace Information"
-                echo "=========================================="
-
                 pwd
                 ls -la
-
-                echo ""
-                find . -maxdepth 2 -type d
                 '''
             }
         }
 
         stage('SonarQube Analysis') {
+
             steps {
+
                 script {
 
                     def scannerHome = tool 'SonarScanner'
@@ -67,165 +64,256 @@ pipeline {
                         """
 
                     }
+
                 }
+
             }
+
         }
 
         stage('Quality Gate') {
+
             steps {
-                timeout(time: 15, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: false 
+
+                timeout(time:15, unit:'MINUTES') {
+
+                    waitForQualityGate abortPipeline:false
+
                 }
+
             }
+
         }
 
         stage('Fetch Secrets from Azure Key Vault') {
-    steps {
-        withAzureKeyvault(
-            credentialIDOverride: 'azure-sp',
-            keyVaultURLOverride: 'https://mlproject-keyvault.vault.azure.net/',
-            azureKeyVaultSecrets: [
-                [
-                    secretType: 'Secret',
-                    name: 'storage-connection-string',
-                    envVariable: 'AZURE_STORAGE_CONNECTION_STRING'
-                ]
-            ]
-        ) {
-            sh '''
-                echo "Secret Loaded Successfully"
-                echo $AZURE_STORAGE_CONNECTION_STRING
-            '''
+
+            steps {
+
+                withAzureKeyvault(
+
+                    credentialIDOverride:'azure-sp',
+
+                    keyVaultURLOverride:'https://mlproject-keyvault.vault.azure.net/',
+
+                    azureKeyVaultSecrets:[
+
+                        [
+
+                            secretType:'Secret',
+
+                            name:'storage-connection-string',
+
+                            envVariable:'AZURE_STORAGE_CONNECTION_STRING'
+
+                        ]
+
+                    ]
+
+                ) {
+
+                    sh '''
+                    echo "Azure KeyVault Secret Loaded"
+                    '''
+
+                }
+
+            }
+
         }
-    }
-}
+
         stage('Build Docker Images') {
 
-    parallel {
+            parallel {
 
-        stage('Build Medical Chatbot Image') {
+                stage('Medical Chatbot') {
+
+                    steps {
+
+                        dir('medical-chatbot') {
+
+                            sh '''
+                            docker build -t ${MEDICAL_IMAGE} .
+                            '''
+
+                        }
+
+                    }
+
+                }
+
+                stage('Arrhythmia') {
+
+                    steps {
+
+                        dir('Classification of Arrhythmia [ECG DATA]') {
+
+                            sh '''
+                            docker build -t ${ARR_IMAGE} .
+                            '''
+
+                        }
+
+                    }
+
+                }
+
+            }
+
+        }
+
+        stage('Push Images to DockerHub') {
+
             steps {
 
-                dir('medical-chatbot') {
+                withCredentials([
+
+                    usernamePassword(
+
+                        credentialsId:'dockerhub-creds',
+
+                        usernameVariable:'DOCKER_USER',
+
+                        passwordVariable:'DOCKER_PASS'
+
+                    )
+
+                ]) {
 
                     sh '''
-                    echo "Building Medical Chatbot Image"
+                    echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
 
-                    docker build -t ${MEDICAL_IMAGE} .
-
-                    docker images | grep medical-chatbot
+                    docker push ${MEDICAL_IMAGE}
+                    docker push ${ARR_IMAGE}
                     '''
 
                 }
 
             }
+
         }
 
-        stage('Build Arrhythmia Image') {
+        stage('Update Kubernetes Manifests') {
+
             steps {
 
-                dir('Classification of Arrhythmia [ECG DATA]') {
+                sh """
+                sed -i 's|image: .*medical-chatbot.*|image: ${MEDICAL_IMAGE}|g' k8s/medical-chatbot-deployment.yaml
+
+                sed -i 's|image: .*arrhythmia.*|image: ${ARR_IMAGE}|g' k8s/arrhythmia-deployment.yml
+                """
+
+            }
+
+        }
+
+        stage('Login to Azure') {
+
+            steps {
+
+                withCredentials([
+
+                    usernamePassword(
+
+                        credentialsId:'azure-sp-jenkins',
+
+                        usernameVariable:'AZURE_CLIENT_ID',
+
+                        passwordVariable:'AZURE_CLIENT_SECRET'
+
+                    ),
+
+                    string(
+
+                        credentialsId:'azure-tenant-id',
+
+                        variable:'AZURE_TENANT_ID'
+
+                    )
+
+                ]) {
 
                     sh '''
-                    echo "Building Arrhythmia Image"
-
-                    docker build -t ${ARR_IMAGE} .
-
-                    docker images | grep arrhythmia
+                    az login --service-principal \
+                    -u $AZURE_CLIENT_ID \
+                    -p $AZURE_CLIENT_SECRET \
+                    --tenant $AZURE_TENANT_ID
                     '''
 
                 }
 
             }
+
         }
 
-    }
-}
+        stage('Get AKS Credentials') {
 
-        stage('Stop Existing Containers') {
             steps {
 
                 sh '''
-                docker stop ${MEDICAL_CONTAINER} || true
-                docker stop ${ARR_CONTAINER} || true
+                az aks get-credentials \
+                --resource-group ${RESOURCE_GROUP} \
+                --name ${AKS_NAME} \
+                --overwrite-existing
                 '''
 
             }
+
         }
 
-        stage('Remove Existing Containers') {
+        stage('Deploy to AKS') {
+
             steps {
 
                 sh '''
-                docker rm ${MEDICAL_CONTAINER} || true
-                docker rm ${ARR_CONTAINER} || true
+                kubectl apply -f k8s/
                 '''
 
             }
+
         }
 
-        stage('Run Medical Chatbot') {
+        stage('Verify Deployment') {
+
             steps {
 
                 sh '''
-                docker run -d \
-                  --name ${MEDICAL_CONTAINER} \
-                  -p ${MEDICAL_PORT}:${MEDICAL_PORT} \
-                  -e AZURE_STORAGE_CONNECTION_STRING="${AZURE_STORAGE_CONNECTION_STRING}" \
-                  -e KEY_VAULT_NAME="${KEY_VAULT_NAME}" \
-                  ${MEDICAL_IMAGE}
+                kubectl rollout status deployment/medical-chatbot
+
+                kubectl rollout status deployment/arrhythmia
+
+                kubectl get pods
+
+                kubectl get svc
                 '''
 
             }
+
         }
 
-        stage('Run Arrhythmia') {
+        stage('AKS Health Check') {
+
             steps {
 
                 sh '''
-                docker run -d \
-                  --name ${ARR_CONTAINER} \
-                  -p ${ARR_PORT}:${ARR_PORT} \
-                  -e AZURE_STORAGE_CONNECTION_STRING="${AZURE_STORAGE_CONNECTION_STRING}" \
-                  -e KEY_VAULT_NAME="${KEY_VAULT_NAME}" \
-                  ${ARR_IMAGE}
-                '''
 
-            }
-        }
+                MEDICAL_IP=$(kubectl get svc medical-chatbot-service -o jsonpath="{.status.loadBalancer.ingress[0].ip}")
 
-        stage('Health Check') {
-            steps {
+                ARR_IP=$(kubectl get svc arrhythmia-service -o jsonpath="{.status.loadBalancer.ingress[0].ip}")
 
-                sh '''
-                echo "Waiting for applications..."
-                sleep 20
+                echo "Medical Chatbot IP: $MEDICAL_IP"
+
+                echo "Arrhythmia IP: $ARR_IP"
 
                 echo ""
-                docker ps
 
-                echo ""
-                echo "Medical Chatbot Health"
+                curl http://$MEDICAL_IP/health || true
 
-                curl -f http://localhost:${MEDICAL_PORT}/health || true
+                curl http://$ARR_IP/health || true
 
-                echo ""
-                echo "Arrhythmia"
-
-                curl -f http://localhost:${ARR_PORT}/ || true
                 '''
 
             }
-        }
 
-        stage('Cleanup') {
-            steps {
-
-                sh '''
-                docker image prune -f
-                '''
-
-            }
         }
 
     }
@@ -234,20 +322,25 @@ pipeline {
 
         success {
 
-            echo "========================================="
-            echo "Pipeline Completed Successfully"
-            echo "========================================="
+            echo "=================================="
 
-            echo "Medical Chatbot : http://<VM-IP>:5000"
-            echo "Arrhythmia      : http://<VM-IP>:5010"
+            echo "Pipeline Completed Successfully"
+
+            echo "=================================="
+
+            sh '''
+
+            kubectl get pods
+
+            kubectl get svc
+
+            '''
 
         }
 
         failure {
 
-            echo "========================================="
             echo "Pipeline Failed"
-            echo "========================================="
 
         }
 
