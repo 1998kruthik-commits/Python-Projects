@@ -8,7 +8,7 @@ blob_service = BlobServiceClient.from_connection_string(
 )
 
 if CONNECTION_STRING is None:
-    raise Exception("AZURE_STORAGE_CONNECTION_STRING environment variable not found.")
+    raise EnvironmentError("AZURE_STORAGE_CONNECTION_STRING environment variable not found.")
 
 blob_service_client = BlobServiceClient.from_connection_string(CONNECTION_STRING)
 
