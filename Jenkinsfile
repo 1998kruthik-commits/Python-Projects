@@ -64,21 +64,49 @@ pipeline {
             }
         }
 
-        stage('Fetch Secrets from Azure Key Vault') {
+        // 🔐 LOGIN FIRST (important for KeyVault)
+        stage('Login to Azure') {
             steps {
-                withAzureKeyvault(
-                    credentialIDOverride:'azure-sp-jenkins',
-                    keyVaultURLOverride:'https://mlproject-keyvault.vault.azure.net/',
-                    azureKeyVaultSecrets:[
-                        [
-                            secretType:'Secret',
-                            name:'storage-connection-string',
-                            envVariable:'AZURE_STORAGE_CONNECTION_STRING'
-                        ]
-                    ]
-                ) {
-                    sh 'echo "KeyVault Secret Loaded"'
+                withCredentials([
+                    usernamePassword(
+                        credentialsId:'azure-sp-jenkins',
+                        usernameVariable:'AZURE_CLIENT_ID',
+                        passwordVariable:'AZURE_CLIENT_SECRET'
+                    ),
+                    string(
+                        credentialsId:'azure-tenant-id',
+                        variable:'AZURE_TENANT_ID'
+                    )
+                ]) {
+                    sh '''
+                    echo "Logging into Azure..."
+                    az login --service-principal \
+                      -u $AZURE_CLIENT_ID \
+                      -p $AZURE_CLIENT_SECRET \
+                      --tenant $AZURE_TENANT_ID
+
+                    az account set --subscription ${SUBSCRIPTION_ID}
+
+                    echo "Azure Account Info:"
+                    az account show
+                    '''
                 }
+            }
+        }
+
+        // 🔑 FETCH SECRET USING AZ CLI (more reliable than plugin)
+        stage('Fetch Secrets from Key Vault') {
+            steps {
+                sh '''
+                echo "Fetching secret from Key Vault..."
+
+                export AZURE_STORAGE_CONNECTION_STRING=$(az keyvault secret show \
+                  --vault-name ${KEY_VAULT_NAME} \
+                  --name storage-connection-string \
+                  --query value -o tsv)
+
+                echo "Secret fetched successfully"
+                '''
             }
         }
 
@@ -96,7 +124,7 @@ pipeline {
                 stage('Arrhythmia') {
                     steps {
                         dir('Classification of Arrhythmia [ECG DATA]') {
-                            sh 'docker build -t ${ARR_IMAGE} .'
+                            sh 'docker build -t "${ARR_IMAGE}" .'
                         }
                     }
                 }
@@ -131,40 +159,13 @@ pipeline {
             }
         }
 
-        stage('Login to Azure') {
-            steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId:'azure-sp-jenkins',
-                        usernameVariable:'AZURE_CLIENT_ID',
-                        passwordVariable:'AZURE_CLIENT_SECRET'
-                    ),
-                    string(
-                        credentialsId:'azure-tenant-id',
-                        variable:'AZURE_TENANT_ID'
-                    )
-                ]) {
-                    sh '''
-                    az login --service-principal \
-                    -u $AZURE_CLIENT_ID \
-                    -p $AZURE_CLIENT_SECRET \
-                    --tenant $AZURE_TENANT_ID
-
-                    az account set --subscription $SUBSCRIPTION_ID
-
-                    az account show
-                    '''
-                }
-            }
-        }
-
         stage('Get AKS Credentials') {
             steps {
                 sh '''
                 az aks get-credentials \
-                --resource-group ${RESOURCE_GROUP} \
-                --name ${AKS_NAME} \
-                --overwrite-existing
+                  --resource-group ${RESOURCE_GROUP} \
+                  --name ${AKS_NAME} \
+                  --overwrite-existing
                 '''
             }
         }
@@ -220,7 +221,5 @@ pipeline {
         always {
             cleanWs()
         }
-
     }
-
 }
