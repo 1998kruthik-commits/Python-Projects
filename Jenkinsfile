@@ -3,6 +3,7 @@ pipeline {
     agent any
 
     environment {
+        PATH = "/usr/local/bin:/usr/bin:/bin:${env.PATH}"
         GIT_URL = "https://github.com/1998kruthik-commits/Python-Projects.git"
         DOCKER_REPO = "kruthikchethu"
         BUILD_TAG = "${BUILD_NUMBER}"
@@ -174,11 +175,14 @@ pipeline {
             }
         }
 
-        stage('Deploy to AKS') {
-            steps {
-                sh 'kubectl apply -f k8s/'
-            }
-        }
+       stage('Deploy to AKS') {
+    steps {
+        sh '''
+            kubectl apply -f k8s/medical-chatbot-deployment.yaml
+            kubectl apply -f k8s/arrhythmia-deployment.yml
+        '''
+    }
+}
 
         stage('Verify Deployment') {
             steps {
