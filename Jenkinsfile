@@ -14,7 +14,7 @@ pipeline {
         AKS_NAME       = "MLProject-AKS"
         KEY_VAULT_NAME = "mlproject-keyvault"
 
-        SUBSCRIPTION_ID = "34223793-8b41-4434-a686-438e9f0dc8df"
+        SUBSCRIPTION_ID = "f0c66309-7e43-4400-9c2b-4304e2c2a752"
     }
 
     stages {
