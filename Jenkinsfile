@@ -73,7 +73,7 @@ pipeline {
             steps {
                 withAzureKeyvault(
                     credentialIDOverride: 'azure-sp-jenkins',
-                    keyVaultURLOverride: 'https://mlproject-keyvault.vault.azure.net/',
+                    keyVaultURLOverride: 'https://mlpythonproject.vault.azure.net/',
                     azureKeyVaultSecrets: [
                         [
                             secretType: 'Secret',
