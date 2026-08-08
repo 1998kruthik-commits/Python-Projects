@@ -11,7 +11,7 @@ pipeline {
         ARR_IMAGE     = "${DOCKER_REPO}/arrhythmia:${BUILD_TAG}"
 
         RESOURCE_GROUP = "TeamZanskar"
-        AKS_NAME       = "MLProject-AKS"
+        AKS_NAME       = "myakcluster"
         KEY_VAULT_NAME = "myakcluster"
 
         SUBSCRIPTION_ID = "f0c66309-7e43-4400-9c2b-4304e2c2a752"
