@@ -1,9 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
-
 metadata:
   name: arrhythmia
-
 spec:
   replicas: 2
 
@@ -18,11 +16,26 @@ spec:
 
     spec:
       containers:
-      - name: arrhythmia
+        - name: arrhythmia
+          image: kruthikchethu/arrhythmia:v1
+          imagePullPolicy: Always
 
-        image: kruthikchethu/arrhythmia:v1
+          ports:
+            - containerPort: 5010
 
-        imagePullPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: arrhythmia-service
 
-        ports:
-        - containerPort: 5010
+spec:
+  type: LoadBalancer
+
+  selector:
+    app: arrhythmia
+
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 5009
