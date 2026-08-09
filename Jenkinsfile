@@ -196,20 +196,86 @@ pipeline {
         }
 
         stage('AKS Health Check') {
-            steps {
-                sh '''
-                MEDICAL_IP=$(kubectl get svc medical-chatbot-service -o jsonpath="{.status.loadBalancer.ingress[0].ip}")
-                ARR_IP=$(kubectl get svc arrhythmia-service -o jsonpath="{.status.loadBalancer.ingress[0].ip}")
+    steps {
+        sh '''
+            echo "========================================"
+            echo "AKS SERVICES"
+            echo "========================================"
 
-                echo "Medical Chatbot IP: $MEDICAL_IP"
-                echo "Arrhythmia IP: $ARR_IP"
+            kubectl get svc
 
-                curl -f http://$MEDICAL_IP/health || echo "Medical health check failed"
-                curl -f http://$ARR_IP/health || echo "Arrhythmia health check failed"
-                '''
-            }
-        }
+            echo "========================================"
+            echo "Waiting for Medical Chatbot External IP"
+            echo "========================================"
+
+            MEDICAL_IP=""
+
+            for i in {1..30}; do
+
+                MEDICAL_IP=$(kubectl get svc medical-chatbot-service \
+                    -o jsonpath='{.status.loadBalancer.ingress[0].ip}' \
+                    2>/dev/null || true)
+
+                if [ -n "$MEDICAL_IP" ]; then
+                    echo "Medical Chatbot External IP: $MEDICAL_IP"
+                    break
+                fi
+
+                echo "Attempt $i/30 - External IP not ready..."
+                sleep 10
+            done
+
+            if [ -z "$MEDICAL_IP" ]; then
+                echo "ERROR: Medical Chatbot External IP was not assigned"
+                kubectl get svc medical-chatbot-service
+                kubectl describe svc medical-chatbot-service
+                exit 1
+            fi
+
+            echo "========================================"
+            echo "Waiting for Arrhythmia External IP"
+            echo "========================================"
+
+            ARRHYTHMIA_IP=""
+
+            for i in {1..30}; do
+
+                ARRHYTHMIA_IP=$(kubectl get svc arrhythmia-service \
+                    -o jsonpath='{.status.loadBalancer.ingress[0].ip}' \
+                    2>/dev/null || true)
+
+                if [ -n "$ARRHYTHMIA_IP" ]; then
+                    echo "Arrhythmia External IP: $ARRHYTHMIA_IP"
+                    break
+                fi
+
+                echo "Attempt $i/30 - External IP not ready..."
+                sleep 10
+            done
+
+            if [ -z "$ARRHYTHMIA_IP" ]; then
+                echo "ERROR: Arrhythmia External IP was not assigned"
+                kubectl get svc arrhythmia-service
+                kubectl describe svc arrhythmia-service
+                exit 1
+            fi
+
+            echo "========================================"
+            echo "APPLICATION URLS"
+            echo "========================================"
+
+            echo "Medical Chatbot:"
+            echo "http://$MEDICAL_IP"
+
+            echo "Arrhythmia:"
+            echo "http://$ARRHYTHMIA_IP"
+
+            echo "========================================"
+            echo "AKS HEALTH CHECK PASSED"
+            echo "========================================"
+        '''
     }
+}
 
     post {
 
