@@ -13,11 +13,23 @@ pipeline {
 
         GIT_URL = "https://github.com/1998kruthik-commits/Python-Projects.git"
 
+        // ========================================================
+        // DOCKER
+        // BUILD_NUMBER automatically creates a new image version
+        // Build 9  -> :9
+        // Build 10 -> :10
+        // Build 11 -> :11
+        // ========================================================
+
         DOCKER_REPO = "kruthikchethu"
         BUILD_TAG = "${BUILD_NUMBER}"
 
         MEDICAL_IMAGE = "${DOCKER_REPO}/medical-chatbot:${BUILD_TAG}"
         ARR_IMAGE     = "${DOCKER_REPO}/arrhythmia:${BUILD_TAG}"
+
+        // ========================================================
+        // AZURE / AKS
+        // ========================================================
 
         RESOURCE_GROUP = "MLPython3418"
         AKS_NAME       = "myakcluster"
@@ -31,9 +43,9 @@ pipeline {
     stages {
 
 
-        // ============================================================
-        // CHECKOUT
-        // ============================================================
+        // ========================================================
+        // CHECKOUT CODE
+        // ========================================================
 
         stage('Checkout Code') {
 
@@ -65,9 +77,9 @@ pipeline {
         }
 
 
-        // ============================================================
+        // ========================================================
         // WORKSPACE INFORMATION
-        // ============================================================
+        // ========================================================
 
         stage('Workspace Info') {
 
@@ -109,6 +121,10 @@ pipeline {
                     docker --version || true
 
                     echo ""
+                    echo "Docker access test:"
+                    docker version || true
+
+                    echo ""
                     echo "========================================"
                     echo "KUBELOGIN"
                     echo "========================================"
@@ -120,9 +136,9 @@ pipeline {
         }
 
 
-        // ============================================================
-        // SONARQUBE
-        // ============================================================
+        // ========================================================
+        // SONARQUBE ANALYSIS
+        // ========================================================
 
         stage('SonarQube Analysis') {
 
@@ -141,13 +157,13 @@ pipeline {
                             echo "========================================"
 
                             echo "SonarQube URL:"
-                            echo "\$SONAR_HOST_URL"
+                            echo "\\$SONAR_HOST_URL"
 
                             echo ""
                             echo "Testing SonarQube connectivity..."
 
                             curl -f --connect-timeout 10 \\
-                                "\$SONAR_HOST_URL/api/server/version"
+                                "\\$SONAR_HOST_URL/api/server/version"
 
                             echo ""
                             echo "SonarQube is reachable."
@@ -168,9 +184,9 @@ pipeline {
         }
 
 
-        // ============================================================
+        // ========================================================
         // QUALITY GATE
-        // ============================================================
+        // ========================================================
 
         stage('Quality Gate') {
 
@@ -184,9 +200,9 @@ pipeline {
         }
 
 
-        // ============================================================
+        // ========================================================
         // AZURE KEY VAULT
-        // ============================================================
+        // ========================================================
 
         stage('Fetch Secrets from Azure Key Vault') {
 
@@ -231,49 +247,125 @@ pipeline {
         }
 
 
-        // ============================================================
+        // ========================================================
         // BUILD DOCKER IMAGES
-        // ============================================================
+        // ========================================================
 
         stage('Build Docker Images') {
-    parallel {
 
-        stage('Medical Chatbot') {
-            steps {
-                dir('medical-chatbot') {
-                    sh '''
-                        echo "Building Medical Chatbot"
-                        echo "Image: ${MEDICAL_IMAGE}:${BUILD_TAG}"
+            parallel {
 
-                        docker build \
-                            -t ${MEDICAL_IMAGE}:${BUILD_TAG} \
-                            .
-                    '''
+                // ------------------------------------------------
+                // MEDICAL CHATBOT
+                // ------------------------------------------------
+
+                stage('Medical Chatbot') {
+
+                    steps {
+
+                        dir('medical-chatbot') {
+
+                            sh '''
+
+                                set -e
+
+                                echo "========================================"
+                                echo "BUILDING MEDICAL CHATBOT IMAGE"
+                                echo "========================================"
+
+                                echo ""
+                                echo "Jenkins Build Number:"
+                                echo "$BUILD_NUMBER"
+
+                                echo ""
+                                echo "Image:"
+                                echo "$MEDICAL_IMAGE"
+
+                                echo ""
+                                echo "Docker user:"
+                                whoami
+
+                                echo ""
+                                echo "Building image..."
+
+                                docker build \\
+                                    -t "$MEDICAL_IMAGE" \\
+                                    .
+
+                                echo ""
+                                echo "Medical Chatbot image built successfully."
+
+                                echo ""
+                                echo "Image verification:"
+
+                                docker image inspect "$MEDICAL_IMAGE" >/dev/null
+
+                                echo "Image exists:"
+                                docker images "$DOCKER_REPO/medical-chatbot"
+                            '''
+                        }
+                    }
+                }
+
+
+                // ------------------------------------------------
+                // ARRHYTHMIA
+                // ------------------------------------------------
+
+                stage('Arrhythmia') {
+
+                    steps {
+
+                        dir('Classification of Arrhythmia [ECG DATA]') {
+
+                            sh '''
+
+                                set -e
+
+                                echo "========================================"
+                                echo "BUILDING ARRHYTHMIA IMAGE"
+                                echo "========================================"
+
+                                echo ""
+                                echo "Jenkins Build Number:"
+                                echo "$BUILD_NUMBER"
+
+                                echo ""
+                                echo "Image:"
+                                echo "$ARR_IMAGE"
+
+                                echo ""
+                                echo "Docker user:"
+                                whoami
+
+                                echo ""
+                                echo "Building image..."
+
+                                docker build \\
+                                    -t "$ARR_IMAGE" \\
+                                    .
+
+                                echo ""
+                                echo "Arrhythmia image built successfully."
+
+                                echo ""
+                                echo "Image verification:"
+
+                                docker image inspect "$ARR_IMAGE" >/dev/null
+
+                                echo "Image exists:"
+                                docker images "$DOCKER_REPO/arrhythmia"
+                            '''
+                        }
+                    }
                 }
             }
         }
 
-        stage('Arrhythmia') {
-            steps {
-                dir('Classification of Arrhythmia [ECG DATA]') {
-                    sh '''
-                        echo "Building Arrhythmia"
-                        echo "Image: ${ARRHYTHMIA_IMAGE}:${BUILD_TAG}"
 
-                        docker build \
-                            -t ${ARRHYTHMIA_IMAGE}:${BUILD_TAG} \
-                            .
-                    '''
-                }
-            }
-        }
-    }
-}
-
-
-        // ============================================================
-        // DOCKER HUB
-        // ============================================================
+        // ========================================================
+        // PUSH IMAGES TO DOCKER HUB
+        // ========================================================
 
         stage('Push Images to DockerHub') {
 
@@ -294,9 +386,26 @@ pipeline {
 
                     sh '''
 
+                        set -e
+
                         echo "========================================"
-                        echo "DOCKER HUB LOGIN"
+                        echo "DOCKER HUB"
                         echo "========================================"
+
+                        echo ""
+                        echo "Jenkins Build Number:"
+                        echo "$BUILD_NUMBER"
+
+                        echo ""
+                        echo "Medical Image:"
+                        echo "$MEDICAL_IMAGE"
+
+                        echo ""
+                        echo "Arrhythmia Image:"
+                        echo "$ARR_IMAGE"
+
+                        echo ""
+                        echo "Logging into Docker Hub..."
 
                         echo "$DOCKER_PASS" | \
                             docker login \
@@ -317,47 +426,36 @@ pipeline {
                         docker push "$ARR_IMAGE"
 
                         echo ""
-                        echo "Docker images pushed successfully."
+                        echo "========================================"
+                        echo "DOCKER IMAGES PUSHED SUCCESSFULLY"
+                        echo "========================================"
+
+                        echo ""
+                        echo "Medical:"
+                        echo "$MEDICAL_IMAGE"
+
+                        echo ""
+                        echo "Arrhythmia:"
+                        echo "$ARR_IMAGE"
 
                         docker logout || true
                     '''
                 }
             }
         }
-        
-        stage('Push Images to DockerHub') {
-    steps {
-        withCredentials([
-            usernamePassword(
-                credentialsId: 'dockerhub-creds',
-                usernameVariable: 'DOCKER_USERNAME',
-                passwordVariable: 'DOCKER_PASSWORD'
-            )
-        ]) {
-            sh '''
-                echo "$DOCKER_PASSWORD" | docker login \
-                    -u "$DOCKER_USERNAME" \
-                    --password-stdin
-
-                docker push ${MEDICAL_IMAGE}:${IMAGE_TAG}
-                docker push ${ARRHYTHMIA_IMAGE}:${IMAGE_TAG}
-
-                docker logout
-            '''
-        }
-    }
-}
 
 
-        // ============================================================
+        // ========================================================
         // UPDATE KUBERNETES MANIFESTS
-        // ============================================================
+        // ========================================================
 
         stage('Update Kubernetes Manifests') {
 
             steps {
 
                 sh '''
+
+                    set -e
 
                     echo "========================================"
                     echo "UPDATING KUBERNETES MANIFESTS"
@@ -372,6 +470,10 @@ pipeline {
                     echo "$ARR_IMAGE"
 
 
+                    // ------------------------------------------------
+                    // MEDICAL CHATBOT
+                    // ------------------------------------------------
+
                     echo ""
                     echo "Updating Medical Chatbot manifest..."
 
@@ -379,6 +481,10 @@ pipeline {
                         "s|image: .*medical-chatbot.*|image: ${MEDICAL_IMAGE}|g" \
                         k8s/medical-chatbot-deployment.yaml
 
+
+                    // ------------------------------------------------
+                    // ARRHYTHMIA
+                    // ------------------------------------------------
 
                     echo ""
                     echo "Updating Arrhythmia manifest..."
@@ -408,9 +514,9 @@ pipeline {
         }
 
 
-        // ============================================================
-        // AZURE LOGIN
-        // ============================================================
+        // ========================================================
+        // LOGIN TO AZURE
+        // ========================================================
 
         stage('Login to Azure') {
 
@@ -465,9 +571,9 @@ pipeline {
         }
 
 
-        // ============================================================
-        // INSTALL / VERIFY KUBECTL + KUBELOGIN
-        // ============================================================
+        // ========================================================
+        // PREPARE AKS TOOLS
+        // ========================================================
 
         stage('Prepare AKS Tools') {
 
@@ -481,6 +587,9 @@ pipeline {
                     echo "PREPARING AKS TOOLS"
                     echo "========================================"
 
+                    mkdir -p "$HOME/.local/bin"
+                    mkdir -p "$HOME/.kube"
+
                     echo ""
                     echo "Installing kubectl and kubelogin if required..."
 
@@ -489,9 +598,6 @@ pipeline {
                         --kubelogin-install-location "$HOME/.local/bin/kubelogin" \
                         || true
 
-
-                    mkdir -p "$HOME/.local/bin"
-                    mkdir -p "$HOME/.kube"
 
                     export PATH="$HOME/.local/bin:$PATH"
 
@@ -513,9 +619,10 @@ pipeline {
                         echo ""
                         echo "ERROR: kubelogin is not installed or not in PATH."
 
-                        echo "Checking possible installation locations..."
-
-                        find "$HOME" -name kubelogin -type f 2>/dev/null || true
+                        find "$HOME" \
+                            -name kubelogin \
+                            -type f \
+                            2>/dev/null || true
 
                         exit 1
                     fi
@@ -528,9 +635,9 @@ pipeline {
         }
 
 
-        // ============================================================
-        // AKS CREDENTIALS
-        // ============================================================
+        // ========================================================
+        // GET AKS CREDENTIALS
+        // ========================================================
 
         stage('Get & Verify AKS Credentials') {
 
@@ -618,9 +725,9 @@ pipeline {
         }
 
 
-        // ============================================================
+        // ========================================================
         // DEPLOY TO AKS
-        // ============================================================
+        // ========================================================
 
         stage('Deploy & Verify AKS') {
 
@@ -636,6 +743,14 @@ pipeline {
                     echo "========================================"
                     echo "DEPLOYING TO AKS"
                     echo "========================================"
+
+                    echo ""
+                    echo "Medical Image:"
+                    echo "$MEDICAL_IMAGE"
+
+                    echo ""
+                    echo "Arrhythmia Image:"
+                    echo "$ARR_IMAGE"
 
 
                     echo ""
@@ -691,9 +806,9 @@ pipeline {
         }
 
 
-        // ============================================================
+        // ========================================================
         // AKS HEALTH CHECK
-        // ============================================================
+        // ========================================================
 
         stage('AKS Health Check') {
 
@@ -713,9 +828,9 @@ pipeline {
                     kubectl get svc
 
 
-                    # ------------------------------------------------
-                    # MEDICAL CHATBOT
-                    # ------------------------------------------------
+                    // ------------------------------------------------
+                    // MEDICAL CHATBOT
+                    // ------------------------------------------------
 
                     echo ""
                     echo "========================================"
@@ -762,9 +877,9 @@ pipeline {
                     fi
 
 
-                    # ------------------------------------------------
-                    # ARRHYTHMIA
-                    # ------------------------------------------------
+                    // ------------------------------------------------
+                    // ARRHYTHMIA
+                    // ------------------------------------------------
 
                     echo ""
                     echo "========================================"
@@ -811,9 +926,9 @@ pipeline {
                     fi
 
 
-                    # ------------------------------------------------
-                    # FINAL URLS
-                    # ------------------------------------------------
+                    // ------------------------------------------------
+                    // FINAL URLS
+                    // ------------------------------------------------
 
                     echo ""
                     echo "========================================"
@@ -852,6 +967,10 @@ pipeline {
             echo "PIPELINE COMPLETED SUCCESSFULLY"
             echo "========================================"
 
+            echo "Build Number: ${BUILD_NUMBER}"
+            echo "Medical Image: ${MEDICAL_IMAGE}"
+            echo "Arrhythmia Image: ${ARR_IMAGE}"
+
             sh '''
                 export PATH="$HOME/.local/bin:$PATH"
                 export KUBECONFIG="$HOME/.kube/config"
@@ -870,6 +989,8 @@ pipeline {
             echo "========================================"
             echo "PIPELINE FAILED"
             echo "========================================"
+
+            echo "Build Number: ${BUILD_NUMBER}"
 
             sh '''
                 export PATH="$HOME/.local/bin:$PATH"
