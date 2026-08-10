@@ -197,7 +197,7 @@ pipeline {
                     credentialIDOverride: 'azure-sp-jenkins',
 
                     keyVaultURLOverride:
-                        'https://mlpythonproject.vault.azure.net/',
+                        'https://mlpythonproject1.vault.azure.net/',
 
                     azureKeyVaultSecrets: [
 
