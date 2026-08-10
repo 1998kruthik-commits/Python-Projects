@@ -90,7 +90,6 @@ pipeline {
                     echo "========================================"
 
                     which kubectl || true
-
                     kubectl version --client || true
 
                     echo ""
@@ -99,7 +98,6 @@ pipeline {
                     echo "========================================"
 
                     which az || true
-
                     az version || true
 
                     echo ""
@@ -108,8 +106,15 @@ pipeline {
                     echo "========================================"
 
                     which docker || true
-
                     docker --version || true
+
+                    echo ""
+                    echo "========================================"
+                    echo "KUBELOGIN"
+                    echo "========================================"
+
+                    which kubelogin || true
+                    kubelogin --version || true
                 '''
             }
         }
@@ -380,6 +385,7 @@ pipeline {
                     echo "Arrhythmia image:"
                     echo "$ARR_IMAGE"
 
+
                     echo ""
                     echo "Updating Medical Chatbot manifest..."
 
@@ -474,6 +480,69 @@ pipeline {
 
 
         // ============================================================
+        // INSTALL / VERIFY KUBECTL + KUBELOGIN
+        // ============================================================
+
+        stage('Prepare AKS Tools') {
+
+            steps {
+
+                sh '''
+
+                    set -e
+
+                    echo "========================================"
+                    echo "PREPARING AKS TOOLS"
+                    echo "========================================"
+
+                    echo ""
+                    echo "Installing kubectl and kubelogin if required..."
+
+                    az aks install-cli \
+                        --install-location "$HOME/.local/bin/kubectl" \
+                        --kubelogin-install-location "$HOME/.local/bin/kubelogin" \
+                        || true
+
+
+                    mkdir -p "$HOME/.local/bin"
+                    mkdir -p "$HOME/.kube"
+
+                    export PATH="$HOME/.local/bin:$PATH"
+
+
+                    echo ""
+                    echo "kubectl:"
+                    which kubectl || true
+                    kubectl version --client || true
+
+
+                    echo ""
+                    echo "kubelogin:"
+                    which kubelogin || true
+                    kubelogin --version || true
+
+
+                    if ! command -v kubelogin >/dev/null 2>&1; then
+
+                        echo ""
+                        echo "ERROR: kubelogin is not installed or not in PATH."
+
+                        echo "Checking possible installation locations..."
+
+                        find "$HOME" -name kubelogin -type f 2>/dev/null || true
+
+                        exit 1
+                    fi
+
+
+                    echo ""
+                    echo "AKS tools are ready."
+                '''
+            }
+        }
+
+
+        // ============================================================
         // AKS CREDENTIALS
         // ============================================================
 
@@ -485,15 +554,31 @@ pipeline {
 
                     set -e
 
+                    export PATH="$HOME/.local/bin:$PATH"
+
                     echo "========================================"
                     echo "GETTING AKS CREDENTIALS"
                     echo "========================================"
 
+                    echo "Jenkins user:"
+                    whoami
+
+                    echo ""
+                    echo "HOME:"
+                    echo "$HOME"
+
+                    echo ""
                     echo "Resource Group:"
                     echo "$RESOURCE_GROUP"
 
+                    echo ""
                     echo "AKS Cluster:"
                     echo "$AKS_NAME"
+
+
+                    mkdir -p "$HOME/.kube"
+
+                    export KUBECONFIG="$HOME/.kube/config"
 
 
                     echo ""
@@ -511,9 +596,27 @@ pipeline {
 
 
                     echo ""
+                    echo "Kubeconfig:"
+                    ls -l "$KUBECONFIG"
+
+
+                    echo ""
                     echo "Current Kubernetes context:"
 
                     kubectl config current-context
+
+
+                    echo ""
+                    echo "Kubernetes contexts:"
+
+                    kubectl config get-contexts
+
+
+                    echo ""
+                    echo "Converting kubeconfig for Azure CLI authentication..."
+
+                    kubelogin convert-kubeconfig \
+                        -l azurecli
 
 
                     echo ""
@@ -540,6 +643,9 @@ pipeline {
                 sh '''
 
                     set -e
+
+                    export PATH="$HOME/.local/bin:$PATH"
+                    export KUBECONFIG="$HOME/.kube/config"
 
                     echo "========================================"
                     echo "DEPLOYING TO AKS"
@@ -583,6 +689,7 @@ pipeline {
 
                     kubectl get deployments
 
+
                     echo ""
                     echo "Pods:"
 
@@ -610,6 +717,9 @@ pipeline {
 
                     set -e
 
+                    export PATH="$HOME/.local/bin:$PATH"
+                    export KUBECONFIG="$HOME/.kube/config"
+
                     echo "========================================"
                     echo "AKS SERVICES"
                     echo "========================================"
@@ -617,9 +727,9 @@ pipeline {
                     kubectl get svc
 
 
-                    // ------------------------------------------------
-                    // MEDICAL CHATBOT
-                    // ------------------------------------------------
+                    # ------------------------------------------------
+                    # MEDICAL CHATBOT
+                    # ------------------------------------------------
 
                     echo ""
                     echo "========================================"
@@ -628,7 +738,7 @@ pipeline {
 
                     MEDICAL_IP=""
 
-                    for i in {1..30}; do
+                    for i in $(seq 1 30); do
 
                         MEDICAL_IP=$(kubectl get svc medical-chatbot-service \
                             -o jsonpath='{.status.loadBalancer.ingress[0].ip}' \
@@ -666,9 +776,9 @@ pipeline {
                     fi
 
 
-                    // ------------------------------------------------
-                    // ARRHYTHMIA
-                    // ------------------------------------------------
+                    # ------------------------------------------------
+                    # ARRHYTHMIA
+                    # ------------------------------------------------
 
                     echo ""
                     echo "========================================"
@@ -677,7 +787,7 @@ pipeline {
 
                     ARRHYTHMIA_IP=""
 
-                    for i in {1..30}; do
+                    for i in $(seq 1 30); do
 
                         ARRHYTHMIA_IP=$(kubectl get svc arrhythmia-service \
                             -o jsonpath='{.status.loadBalancer.ingress[0].ip}' \
@@ -715,9 +825,9 @@ pipeline {
                     fi
 
 
-                    // ------------------------------------------------
-                    // FINAL URLS
-                    // ------------------------------------------------
+                    # ------------------------------------------------
+                    # FINAL URLS
+                    # ------------------------------------------------
 
                     echo ""
                     echo "========================================"
@@ -750,45 +860,86 @@ pipeline {
 
     post {
 
-    success {
-        echo "========================================"
-        echo "PIPELINE COMPLETED SUCCESSFULLY"
-        echo "========================================"
+        success {
 
-        sh '''
-            echo "Final AKS Status:"
+            echo "========================================"
+            echo "PIPELINE COMPLETED SUCCESSFULLY"
+            echo "========================================"
 
-            kubectl get deployments || true
-            kubectl get pods || true
-            kubectl get svc || true
-        '''
-    }
+            sh '''
+                export PATH="$HOME/.local/bin:$PATH"
+                export KUBECONFIG="$HOME/.kube/config"
 
-    failure {
-        echo "========================================"
-        echo "PIPELINE FAILED"
-        echo "========================================"
+                echo "Final AKS Status:"
 
-        sh '''
-            echo "Collecting diagnostics..."
-
-            if [ -f "$HOME/.kube/config" ]; then
-                echo "Kubeconfig exists"
-
-                kubectl config current-context || true
-                kubectl get nodes || true
                 kubectl get deployments || true
-                kubectl get pods -o wide || true
+                kubectl get pods || true
                 kubectl get svc || true
-            else
-                echo "No kubeconfig found."
-                echo "AKS credentials were probably never configured."
-            fi
-        '''
-    }
+            '''
+        }
 
-    always {
-        echo "Cleaning Jenkins workspace..."
-        cleanWs()
+
+        failure {
+
+            echo "========================================"
+            echo "PIPELINE FAILED"
+            echo "========================================"
+
+            sh '''
+                export PATH="$HOME/.local/bin:$PATH"
+                export KUBECONFIG="$HOME/.kube/config"
+
+                echo "Collecting diagnostics..."
+
+
+                if [ -f "$HOME/.kube/config" ]; then
+
+                    echo "Kubeconfig exists."
+
+                    echo ""
+                    echo "Current context:"
+
+                    kubectl config current-context || true
+
+
+                    echo ""
+                    echo "Nodes:"
+
+                    kubectl get nodes || true
+
+
+                    echo ""
+                    echo "Deployments:"
+
+                    kubectl get deployments || true
+
+
+                    echo ""
+                    echo "Pods:"
+
+                    kubectl get pods -o wide || true
+
+
+                    echo ""
+                    echo "Services:"
+
+                    kubectl get svc || true
+
+                else
+
+                    echo "No kubeconfig found."
+                    echo "AKS credentials were probably never configured."
+
+                fi
+            '''
+        }
+
+
+        always {
+
+            echo "Cleaning Jenkins workspace..."
+
+            cleanWs()
+        }
     }
 }
