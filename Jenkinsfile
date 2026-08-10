@@ -750,97 +750,46 @@ pipeline {
 
     post {
 
+    success {
+        echo "========================================"
+        echo "PIPELINE COMPLETED SUCCESSFULLY"
+        echo "========================================"
 
-        // ------------------------------------------------------------
-        // SUCCESS
-        // ------------------------------------------------------------
+        sh '''
+            echo "Final AKS Status:"
 
-        success {
+            kubectl get deployments || true
+            kubectl get pods || true
+            kubectl get svc || true
+        '''
+    }
 
-            echo "========================================"
-            echo "PIPELINE COMPLETED SUCCESSFULLY"
-            echo "========================================"
+    failure {
+        echo "========================================"
+        echo "PIPELINE FAILED"
+        echo "========================================"
 
-            /*
-             * At this point AKS credentials were already obtained
-             * because Deploy & Verify AKS and AKS Health Check passed.
-             */
+        sh '''
+            echo "Collecting diagnostics..."
 
-            sh '''
+            if [ -f "$HOME/.kube/config" ]; then
+                echo "Kubeconfig exists"
 
-                echo "========================================"
-                echo "FINAL AKS STATUS"
-                echo "========================================"
+                kubectl config current-context || true
+                kubectl get nodes || true
+                kubectl get deployments || true
+                kubectl get pods -o wide || true
+                kubectl get svc || true
+            else
+                echo "No kubeconfig found."
+                echo "AKS credentials were probably never configured."
+            fi
+        '''
+    }
 
-                kubectl get deployments
-
-                echo ""
-                echo "Pods:"
-
-                kubectl get pods
-
-                echo ""
-                echo "Services:"
-
-                kubectl get svc
-            '''
-        }
-
-
-        // ------------------------------------------------------------
-        // FAILURE
-        // ------------------------------------------------------------
-
-        failure {
-
-            echo "========================================"
-            echo "PIPELINE FAILED"
-            echo "========================================"
-
-            echo "Collecting Jenkins pipeline diagnostics..."
-
-            /*
-             * IMPORTANT:
-             *
-             * Do NOT blindly run kubectl here.
-             *
-             * If SonarQube, Key Vault, Docker, or another earlier
-             * stage fails, AKS credentials may not exist yet.
-             *
-             * Running kubectl here was causing:
-             *
-             * Authentication required
-             *
-             * That message was hiding the REAL pipeline failure.
-             */
-
-            sh '''
-
-                echo ""
-                echo "Pipeline failed before completion."
-
-                echo ""
-                echo "Workspace information:"
-
-                pwd
-
-                ls -la || true
-            '''
-        }
-
-
-        // ------------------------------------------------------------
-        // ALWAYS
-        // ------------------------------------------------------------
-
-        always {
-
-            echo "========================================"
-            echo "CLEANING JENKINS WORKSPACE"
-            echo "========================================"
-
-            cleanWs()
-        }
+    always {
+        echo "Cleaning Jenkins workspace..."
+        cleanWs()
     }
 }
 
