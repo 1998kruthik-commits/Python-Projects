@@ -19,7 +19,7 @@ pipeline {
         MEDICAL_IMAGE = "${DOCKER_REPO}/medical-chatbot:${BUILD_TAG}"
         ARR_IMAGE     = "${DOCKER_REPO}/arrhythmia:${BUILD_TAG}"
 
-        RESOURCE_GROUP = "TeamZanskar"
+        RESOURCE_GROUP = "MLPython3418"
         AKS_NAME       = "myakcluster"
 
         KEY_VAULT_NAME = "myakcluster"
