@@ -159,43 +159,25 @@ pipeline {
         }
 
         stage('Push Images to DockerHub') {
+    steps {
+        withCredentials([
+            usernamePassword(
+                credentialsId: 'dockerhub-creds',
+                usernameVariable: 'DOCKER_USER',
+                passwordVariable: 'DOCKER_PASS'
+            )
+        ]) {
+            sh '''
+                echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
 
-            steps {
+                docker push ${MEDICAL_IMAGE}
+                docker push ${ARR_IMAGE}
 
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'dockerhub-creds',
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PASS'
-                    )
-                ]) {
-
-                    sh '''
-                        echo "========================================"
-                        echo "DOCKERHUB LOGIN"
-                        echo "========================================"
-
-                        echo "$DOCKER_PASS" | docker login \
-                            -u "$DOCKER_USER" \
-                            --password-stdin
-
-                        echo "========================================"
-                        echo "PUSHING MEDICAL CHATBOT"
-                        echo "========================================"
-
-                        docker push ${MEDICAL_IMAGE}
-
-                        echo "========================================"
-                        echo "PUSHING ARRHYTHMIA"
-                        echo "========================================"
-
-                        docker push ${ARR_IMAGE}
-
-                        echo "Docker images pushed successfully"
-                    '''
-                }
-            }
+                echo "Docker images pushed successfully"
+            '''
         }
+    }
+}
 
         stage('Update Kubernetes Manifests') {
 
@@ -222,135 +204,53 @@ pipeline {
         }
 
         stage('Login to Azure') {
+    steps {
+        withCredentials([
+            azureServicePrincipal('azure-sp-jenkins'),
+            string(credentialsId: 'azure-tenant-id', variable: 'AZURE_TENANT_ID')
+        ]) {
+            sh '''
+                az login \
+                    --service-principal \
+                    -u "$AZURE_CLIENT_ID" \
+                    -p "$AZURE_CLIENT_SECRET" \
+                    --tenant "$AZURE_TENANT_ID"
 
-            steps {
-
-                withCredentials([
-                    azureServicePrincipal('azure-sp-jenkins'),
-                    string(
-                        credentialsId: 'azure-tenant-id',
-                        variable: 'AZURE_TENANT_ID'
-                    )
-                ]) {
-
-                    sh '''
-                        echo "========================================"
-                        echo "LOGIN TO AZURE"
-                        echo "========================================"
-
-                        az login \
-                            --service-principal \
-                            -u "$AZURE_CLIENT_ID" \
-                            -p "$AZURE_CLIENT_SECRET" \
-                            --tenant "$AZURE_TENANT_ID"
-
-                        az account set \
-                            --subscription "$SUBSCRIPTION_ID"
-
-                        echo "========================================"
-                        echo "AZURE ACCOUNT"
-                        echo "========================================"
-
-                        az account show
-                    '''
-                }
-            }
+                az account set --subscription "$SUBSCRIPTION_ID"
+                az account show
+            '''
         }
+    }
+}
 
-        stage('Get AKS Credentials') {
+        stage('Get & Verify AKS Credentials') {
+    steps {
+        sh '''
+            az aks get-credentials \
+                --resource-group "$RESOURCE_GROUP" \
+                --name "$AKS_NAME" \
+                --overwrite-existing
 
-            steps {
+            kubectl config current-context
+            kubectl get nodes
+        '''
+    }
+}
 
-                sh '''
-                    echo "========================================"
-                    echo "GETTING AKS CREDENTIALS"
-                    echo "========================================"
+       stage('Deploy & Verify AKS') {
+    steps {
+        sh '''
+            kubectl apply -f k8s/medical-chatbot-deployment.yaml
+            kubectl apply -f k8s/arrhythmia-deployment.yml
 
-                    az aks get-credentials \
-                        --resource-group "$RESOURCE_GROUP" \
-                        --name "$AKS_NAME" \
-                        --overwrite-existing
+            kubectl rollout status deployment/medical-chatbot --timeout=180s
+            kubectl rollout status deployment/arrhythmia --timeout=180s
 
-                    echo "Current Kubernetes context:"
-
-                    kubectl config current-context
-                '''
-            }
-        }
-
-        stage('Verify AKS Connection') {
-
-            steps {
-
-                sh '''
-                    echo "========================================"
-                    echo "VERIFYING AKS CONNECTION"
-                    echo "========================================"
-
-                    kubectl get nodes
-
-                    echo "AKS connection successful"
-                '''
-            }
-        }
-
-        stage('Deploy to AKS') {
-
-            steps {
-
-                sh '''
-                    echo "========================================"
-                    echo "DEPLOYING TO AKS"
-                    echo "========================================"
-
-                    kubectl apply \
-                        -f k8s/medical-chatbot-deployment.yaml
-
-                    kubectl apply \
-                        -f k8s/arrhythmia-deployment.yml
-
-                    echo "========================================"
-                    echo "KUBERNETES RESOURCES APPLIED"
-                    echo "========================================"
-                '''
-            }
-        }
-
-        stage('Verify Deployment') {
-
-            steps {
-
-                sh '''
-                    echo "========================================"
-                    echo "MEDICAL CHATBOT ROLLOUT"
-                    echo "========================================"
-
-                    kubectl rollout status \
-                        deployment/medical-chatbot \
-                        --timeout=180s
-
-                    echo "========================================"
-                    echo "ARRHYTHMIA ROLLOUT"
-                    echo "========================================"
-
-                    kubectl rollout status \
-                        deployment/arrhythmia \
-                        --timeout=180s
-
-                    echo "========================================"
-                    echo "PODS"
-                    echo "========================================"
-
-                    kubectl get pods
-
-                    echo "========================================"
-                    echo "SERVICES"
-                    echo "========================================"
-
-                    kubectl get svc
-                '''
-            }
-        }
+            kubectl get pods
+            kubectl get svc
+        '''
+    }
+}
 
         stage('AKS Health Check') {
 
