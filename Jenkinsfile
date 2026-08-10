@@ -237,21 +237,63 @@ pipeline {
     }
 }
 
-       stage('Deploy & Verify AKS') {
+       stage('Deploy to AKS') {
+
     steps {
+
         sh '''
-            kubectl apply -f k8s/medical-chatbot-deployment.yaml
-            kubectl apply -f k8s/arrhythmia-deployment.yml
+            echo "========================================"
+            echo "DEPLOYING TO AKS"
+            echo "========================================"
 
-            kubectl rollout status deployment/medical-chatbot --timeout=180s
-            kubectl rollout status deployment/arrhythmia --timeout=180s
+            kubectl apply \
+                -f k8s/medical-chatbot-deployment.yaml
 
-            kubectl get pods
-            kubectl get svc
+            kubectl apply \
+                -f k8s/arrhythmia-deployment.yml
+
+            echo "========================================"
+            echo "KUBERNETES RESOURCES APPLIED"
+            echo "========================================"
         '''
     }
 }
 
+stage('Verify Deployment') {
+
+    steps {
+
+        sh '''
+            echo "========================================"
+            echo "MEDICAL CHATBOT ROLLOUT"
+            echo "========================================"
+
+            kubectl rollout status \
+                deployment/medical-chatbot \
+                --timeout=180s
+
+            echo "========================================"
+            echo "ARRHYTHMIA ROLLOUT"
+            echo "========================================"
+
+            kubectl rollout status \
+                deployment/arrhythmia \
+                --timeout=180s
+
+            echo "========================================"
+            echo "PODS"
+            echo "========================================"
+
+            kubectl get pods
+
+            echo "========================================"
+            echo "SERVICES"
+            echo "========================================"
+
+            kubectl get svc
+        '''
+    }
+}
         stage('AKS Health Check') {
 
             steps {
