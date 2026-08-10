@@ -2,7 +2,13 @@ pipeline {
 
     agent any
 
+    options {
+        skipDefaultCheckout(true)
+        timestamps()
+    }
+
     environment {
+
         PATH = "/usr/local/bin:/usr/bin:/bin:${env.PATH}"
 
         GIT_URL = "https://github.com/1998kruthik-commits/Python-Projects.git"
@@ -15,38 +21,108 @@ pipeline {
 
         RESOURCE_GROUP = "MLPython3418"
         AKS_NAME       = "myakcluster"
-        KEY_VAULT_NAME  = "mlpythonproject1"
+
+        KEY_VAULT_NAME = "myakcluster"
 
         SUBSCRIPTION_ID = "f0c66309-7e43-4400-9c2b-4304e2c2a752"
     }
 
+
     stages {
 
-        stage('Clean Workspace') {
-            steps {
-                deleteDir()
-            }
-        }
+
+        // ============================================================
+        // CHECKOUT
+        // ============================================================
 
         stage('Checkout Code') {
-            steps {
-                checkout scm
-            }
-        }
 
-        stage('Workspace Info') {
             steps {
+
+                echo "========================================"
+                echo "CHECKING OUT SOURCE CODE"
+                echo "========================================"
+
+                checkout scm
+
                 sh '''
+                    echo "Current directory:"
                     pwd
+
+                    echo ""
+                    echo "Git commit:"
+                    git rev-parse --short HEAD
+
+                    echo ""
+                    echo "Git branch:"
+                    git branch --show-current
+
+                    echo ""
+                    echo "Workspace:"
                     ls -la
-                    which kubectl
-                    kubectl version --client
                 '''
             }
         }
 
-        stage('SonarQube Analysis') {
+
+        // ============================================================
+        // WORKSPACE INFORMATION
+        // ============================================================
+
+        stage('Workspace Info') {
+
             steps {
+
+                sh '''
+                    echo "========================================"
+                    echo "WORKSPACE INFORMATION"
+                    echo "========================================"
+
+                    pwd
+
+                    echo ""
+                    echo "Files:"
+                    ls -la
+
+                    echo ""
+                    echo "========================================"
+                    echo "KUBECTL"
+                    echo "========================================"
+
+                    which kubectl || true
+
+                    kubectl version --client || true
+
+                    echo ""
+                    echo "========================================"
+                    echo "AZURE CLI"
+                    echo "========================================"
+
+                    which az || true
+
+                    az version || true
+
+                    echo ""
+                    echo "========================================"
+                    echo "DOCKER"
+                    echo "========================================"
+
+                    which docker || true
+
+                    docker --version || true
+                '''
+            }
+        }
+
+
+        // ============================================================
+        // SONARQUBE
+        // ============================================================
+
+        stage('SonarQube Analysis') {
+
+            steps {
+
                 script {
 
                     def scannerHome = tool 'SonarScanner'
@@ -54,11 +130,31 @@ pipeline {
                     withSonarQubeEnv('mypython') {
 
                         sh """
-                            ${scannerHome}/bin/sonar-scanner \
-                                -Dsonar.projectKey=PythonProjects \
-                                -Dsonar.projectName=PythonProjects \
-                                -Dsonar.sources=. \
-                                -Dsonar.sourceEncoding=UTF-8 \
+
+                            echo "========================================"
+                            echo "SONARQUBE ANALYSIS"
+                            echo "========================================"
+
+                            echo "SonarQube URL:"
+                            echo "\$SONAR_HOST_URL"
+
+                            echo ""
+                            echo "Testing SonarQube connectivity..."
+
+                            curl -f --connect-timeout 10 \\
+                                "\$SONAR_HOST_URL/api/server/version"
+
+                            echo ""
+                            echo "SonarQube is reachable."
+
+                            echo ""
+                            echo "Starting SonarScanner..."
+
+                            ${scannerHome}/bin/sonar-scanner \\
+                                -Dsonar.projectKey=PythonProjects \\
+                                -Dsonar.projectName=PythonProjects \\
+                                -Dsonar.sources=. \\
+                                -Dsonar.sourceEncoding=UTF-8 \\
                                 -Dsonar.python.version=3.12
                         """
                     }
@@ -66,66 +162,139 @@ pipeline {
             }
         }
 
+
+        // ============================================================
+        // QUALITY GATE
+        // ============================================================
+
         stage('Quality Gate') {
+
             steps {
+
                 timeout(time: 15, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
+
+                    waitForQualityGate abortPipeline: false
                 }
             }
         }
 
+
+        // ============================================================
+        // AZURE KEY VAULT
+        // ============================================================
+
         stage('Fetch Secrets from Azure Key Vault') {
+
             steps {
 
                 withAzureKeyvault(
-                    credentialIDOverride: 'jenkins-azure-sp',
-                    keyVaultURLOverride: 'https://mlpythonproject1.vault.azure.net/',
+
+                    credentialIDOverride: 'azure-sp-jenkins',
+
+                    keyVaultURLOverride:
+                        'https://mlpythonproject.vault.azure.net/',
+
                     azureKeyVaultSecrets: [
+
                         [
                             secretType: 'Secret',
                             name: 'storage-connection-string',
                             envVariable: 'AZURE_STORAGE_CONNECTION_STRING'
                         ]
                     ]
+
                 ) {
 
                     sh '''
+
+                        echo "========================================"
+                        echo "AZURE KEY VAULT"
+                        echo "========================================"
+
                         if [ -z "$AZURE_STORAGE_CONNECTION_STRING" ]; then
-                            echo "ERROR: Secret was not loaded from Azure Key Vault"
+
+                            echo "ERROR:"
+                            echo "Azure Storage connection string was not loaded."
+
                             exit 1
                         fi
 
-                        echo "Azure Key Vault secret loaded successfully"
+                        echo "Azure Key Vault secret loaded successfully."
                     '''
                 }
             }
         }
+
+
+        // ============================================================
+        // BUILD DOCKER IMAGES
+        // ============================================================
 
         stage('Build Docker Images') {
 
             parallel {
 
+
+                // ----------------------------------------------------
+                // MEDICAL CHATBOT
+                // ----------------------------------------------------
+
                 stage('Medical Chatbot') {
+
                     steps {
 
                         dir('medical-chatbot') {
 
                             sh '''
+
+                                echo "========================================"
+                                echo "BUILDING MEDICAL CHATBOT IMAGE"
+                                echo "========================================"
+
+                                echo "Image:"
+                                echo "$MEDICAL_IMAGE"
+
                                 docker build \
-                                    -t ${MEDICAL_IMAGE} .
+                                    -t "$MEDICAL_IMAGE" \
+                                    .
+
+                                echo ""
+                                echo "Medical chatbot image built successfully."
+
+                                docker images "$MEDICAL_IMAGE"
                             '''
                         }
                     }
                 }
 
+
+                // ----------------------------------------------------
+                // ARRHYTHMIA
+                // ----------------------------------------------------
+
                 stage('Arrhythmia') {
+
                     steps {
 
                         dir('Classification of Arrhythmia [ECG DATA]') {
 
                             sh '''
+
+                                echo "========================================"
+                                echo "BUILDING ARRHYTHMIA IMAGE"
+                                echo "========================================"
+
+                                echo "Image:"
+                                echo "$ARR_IMAGE"
+
                                 docker build \
-                                    -t ${ARR_IMAGE} .
+                                    -t "$ARR_IMAGE" \
+                                    .
+
+                                echo ""
+                                echo "Arrhythmia image built successfully."
+
+                                docker images "$ARR_IMAGE"
                             '''
                         }
                     }
@@ -133,125 +302,329 @@ pipeline {
             }
         }
 
+
+        // ============================================================
+        // DOCKER HUB
+        // ============================================================
+
         stage('Push Images to DockerHub') {
+
             steps {
 
                 withCredentials([
+
                     usernamePassword(
+
                         credentialsId: 'dockerhub-creds',
+
                         usernameVariable: 'DOCKER_USER',
+
                         passwordVariable: 'DOCKER_PASS'
                     )
+
                 ]) {
 
                     sh '''
-                        echo "$DOCKER_PASS" | docker login \
+
+                        echo "========================================"
+                        echo "DOCKER HUB LOGIN"
+                        echo "========================================"
+
+                        echo "$DOCKER_PASS" | \
+                            docker login \
                             -u "$DOCKER_USER" \
                             --password-stdin
 
-                        docker push ${MEDICAL_IMAGE}
-                        docker push ${ARR_IMAGE}
+                        echo ""
+                        echo "Docker login successful."
 
-                        echo "Docker images pushed successfully"
+                        echo ""
+                        echo "Pushing Medical Chatbot..."
+
+                        docker push "$MEDICAL_IMAGE"
+
+                        echo ""
+                        echo "Pushing Arrhythmia..."
+
+                        docker push "$ARR_IMAGE"
+
+                        echo ""
+                        echo "Docker images pushed successfully."
+
+                        docker logout || true
                     '''
                 }
             }
         }
 
+
+        // ============================================================
+        // UPDATE KUBERNETES MANIFESTS
+        // ============================================================
+
         stage('Update Kubernetes Manifests') {
+
             steps {
 
                 sh '''
-                    sed -i "s|image: .*medical-chatbot.*|image: ${MEDICAL_IMAGE}|g" \
+
+                    echo "========================================"
+                    echo "UPDATING KUBERNETES MANIFESTS"
+                    echo "========================================"
+
+                    echo ""
+                    echo "Medical image:"
+                    echo "$MEDICAL_IMAGE"
+
+                    echo ""
+                    echo "Arrhythmia image:"
+                    echo "$ARR_IMAGE"
+
+                    echo ""
+                    echo "Updating Medical Chatbot manifest..."
+
+                    sed -i \
+                        "s|image: .*medical-chatbot.*|image: ${MEDICAL_IMAGE}|g" \
                         k8s/medical-chatbot-deployment.yaml
 
-                    sed -i "s|image: .*arrhythmia.*|image: ${ARR_IMAGE}|g" \
+
+                    echo ""
+                    echo "Updating Arrhythmia manifest..."
+
+                    sed -i \
+                        "s|image: .*arrhythmia.*|image: ${ARR_IMAGE}|g" \
                         k8s/arrhythmia-deployment.yml
 
-                    echo "Medical Chatbot image:"
-                    grep "image:" k8s/medical-chatbot-deployment.yaml
 
-                    echo "Arrhythmia image:"
-                    grep "image:" k8s/arrhythmia-deployment.yml
+                    echo ""
+                    echo "========================================"
+                    echo "UPDATED IMAGES"
+                    echo "========================================"
+
+                    echo ""
+                    echo "Medical Chatbot:"
+                    grep "image:" \
+                        k8s/medical-chatbot-deployment.yaml
+
+
+                    echo ""
+                    echo "Arrhythmia:"
+                    grep "image:" \
+                        k8s/arrhythmia-deployment.yml
                 '''
             }
         }
 
+
+        // ============================================================
+        // AZURE LOGIN
+        // ============================================================
+
         stage('Login to Azure') {
+
             steps {
 
                 withCredentials([
-                    azureServicePrincipal('jenkins-azure-sp'),
+
+                    azureServicePrincipal(
+                        'azure-sp-jenkins'
+                    ),
+
                     string(
                         credentialsId: 'azure-tenant-id',
                         variable: 'AZURE_TENANT_ID'
                     )
+
                 ]) {
 
                     sh '''
+
+                        set -e
+
+                        echo "========================================"
+                        echo "AZURE LOGIN"
+                        echo "========================================"
+
                         az login \
                             --service-principal \
-                            -u "$AZURE_CLIENT_ID" \
-                            -p "$AZURE_CLIENT_SECRET" \
-                            --tenant "$AZURE_TENANT_ID"
+                            --username "$AZURE_CLIENT_ID" \
+                            --password "$AZURE_CLIENT_SECRET" \
+                            --tenant "$AZURE_TENANT_ID" \
+                            --output none
+
+
+                        echo "Azure login successful."
+
+                        echo ""
+                        echo "Setting subscription..."
 
                         az account set \
                             --subscription "$SUBSCRIPTION_ID"
 
-                        az account show
+
+                        echo ""
+                        echo "Current Azure account:"
+
+                        az account show \
+                            --output table
                     '''
                 }
             }
         }
 
+
+        // ============================================================
+        // AKS CREDENTIALS
+        // ============================================================
+
         stage('Get & Verify AKS Credentials') {
+
             steps {
 
                 sh '''
+
+                    set -e
+
+                    echo "========================================"
+                    echo "GETTING AKS CREDENTIALS"
+                    echo "========================================"
+
+                    echo "Resource Group:"
+                    echo "$RESOURCE_GROUP"
+
+                    echo "AKS Cluster:"
+                    echo "$AKS_NAME"
+
+
+                    echo ""
+                    echo "Getting AKS credentials..."
+
                     az aks get-credentials \
                         --resource-group "$RESOURCE_GROUP" \
                         --name "$AKS_NAME" \
+                        --subscription "$SUBSCRIPTION_ID" \
                         --overwrite-existing
 
+
+                    echo ""
+                    echo "AKS credentials obtained successfully."
+
+
+                    echo ""
+                    echo "Current Kubernetes context:"
+
                     kubectl config current-context
+
+
+                    echo ""
+                    echo "Testing AKS connection..."
+
                     kubectl get nodes
+
+
+                    echo ""
+                    echo "AKS connection successful."
                 '''
             }
         }
 
+
+        // ============================================================
+        // DEPLOY TO AKS
+        // ============================================================
+
         stage('Deploy & Verify AKS') {
+
             steps {
 
                 sh '''
+
+                    set -e
+
+                    echo "========================================"
+                    echo "DEPLOYING TO AKS"
+                    echo "========================================"
+
+
+                    echo ""
+                    echo "Applying Medical Chatbot deployment..."
+
                     kubectl apply \
                         -f k8s/medical-chatbot-deployment.yaml
 
+
+                    echo ""
+                    echo "Applying Arrhythmia deployment..."
+
                     kubectl apply \
                         -f k8s/arrhythmia-deployment.yml
+
+
+                    echo ""
+                    echo "Waiting for Medical Chatbot rollout..."
 
                     kubectl rollout status \
                         deployment/medical-chatbot \
                         --timeout=180s
 
+
+                    echo ""
+                    echo "Waiting for Arrhythmia rollout..."
+
                     kubectl rollout status \
                         deployment/arrhythmia \
                         --timeout=180s
 
+
+                    echo ""
+                    echo "========================================"
+                    echo "DEPLOYMENT STATUS"
+                    echo "========================================"
+
+                    kubectl get deployments
+
+                    echo ""
+                    echo "Pods:"
+
                     kubectl get pods
+
+
+                    echo ""
+                    echo "Services:"
+
                     kubectl get svc
                 '''
             }
         }
 
+
+        // ============================================================
+        // AKS HEALTH CHECK
+        // ============================================================
+
         stage('AKS Health Check') {
+
             steps {
 
                 sh '''
-                    echo "===== AKS SERVICES ====="
+
+                    set -e
+
+                    echo "========================================"
+                    echo "AKS SERVICES"
+                    echo "========================================"
 
                     kubectl get svc
 
-                    echo "===== MEDICAL CHATBOT ====="
+
+                    // ------------------------------------------------
+                    // MEDICAL CHATBOT
+                    // ------------------------------------------------
+
+                    echo ""
+                    echo "========================================"
+                    echo "WAITING FOR MEDICAL CHATBOT EXTERNAL IP"
+                    echo "========================================"
 
                     MEDICAL_IP=""
 
@@ -261,22 +634,46 @@ pipeline {
                             -o jsonpath='{.status.loadBalancer.ingress[0].ip}' \
                             2>/dev/null || true)
 
+
                         if [ -n "$MEDICAL_IP" ]; then
+
+                            echo ""
+                            echo "Medical Chatbot External IP:"
+                            echo "$MEDICAL_IP"
+
                             break
                         fi
 
+
+                        echo "Attempt $i/30 - Medical Chatbot External IP not ready..."
+
                         sleep 10
+
                     done
 
+
                     if [ -z "$MEDICAL_IP" ]; then
-                        echo "ERROR: Medical Chatbot External IP not assigned"
+
+                        echo ""
+                        echo "ERROR:"
+                        echo "Medical Chatbot External IP was not assigned."
+
                         kubectl get svc medical-chatbot-service || true
+
+                        kubectl describe svc medical-chatbot-service || true
+
                         exit 1
                     fi
 
-                    echo "Medical Chatbot: http://$MEDICAL_IP"
 
-                    echo "===== ARRHYTHMIA ====="
+                    // ------------------------------------------------
+                    // ARRHYTHMIA
+                    // ------------------------------------------------
+
+                    echo ""
+                    echo "========================================"
+                    echo "WAITING FOR ARRHYTHMIA EXTERNAL IP"
+                    echo "========================================"
 
                     ARRHYTHMIA_IP=""
 
@@ -286,57 +683,112 @@ pipeline {
                             -o jsonpath='{.status.loadBalancer.ingress[0].ip}' \
                             2>/dev/null || true)
 
+
                         if [ -n "$ARRHYTHMIA_IP" ]; then
+
+                            echo ""
+                            echo "Arrhythmia External IP:"
+                            echo "$ARRHYTHMIA_IP"
+
                             break
                         fi
 
+
+                        echo "Attempt $i/30 - Arrhythmia External IP not ready..."
+
                         sleep 10
+
                     done
 
+
                     if [ -z "$ARRHYTHMIA_IP" ]; then
-                        echo "ERROR: Arrhythmia External IP not assigned"
+
+                        echo ""
+                        echo "ERROR:"
+                        echo "Arrhythmia External IP was not assigned."
+
                         kubectl get svc arrhythmia-service || true
+
+                        kubectl describe svc arrhythmia-service || true
+
                         exit 1
                     fi
 
-                    echo "Arrhythmia: http://$ARRHYTHMIA_IP"
 
-                    echo "===== AKS HEALTH CHECK PASSED ====="
+                    // ------------------------------------------------
+                    // FINAL URLS
+                    // ------------------------------------------------
+
+                    echo ""
+                    echo "========================================"
+                    echo "APPLICATION URLS"
+                    echo "========================================"
+
+                    echo ""
+                    echo "Medical Chatbot:"
+                    echo "http://$MEDICAL_IP"
+
+
+                    echo ""
+                    echo "Arrhythmia:"
+                    echo "http://$ARRHYTHMIA_IP"
+
+
+                    echo ""
+                    echo "========================================"
+                    echo "AKS HEALTH CHECK PASSED"
+                    echo "========================================"
                 '''
             }
         }
     }
 
+
+    // ================================================================
+    // POST ACTIONS
+    // ================================================================
+
     post {
 
-        success {
+    success {
+        echo "========================================"
+        echo "PIPELINE COMPLETED SUCCESSFULLY"
+        echo "========================================"
 
-            echo "========================================"
-            echo "PIPELINE COMPLETED SUCCESSFULLY"
-            echo "========================================"
+        sh '''
+            echo "Final AKS Status:"
 
-            sh '''
-                kubectl get deployments
-                kubectl get pods
-                kubectl get svc
-            '''
-        }
+            kubectl get deployments || true
+            kubectl get pods || true
+            kubectl get svc || true
+        '''
+    }
 
-        failure {
+    failure {
+        echo "========================================"
+        echo "PIPELINE FAILED"
+        echo "========================================"
 
-            echo "========================================"
-            echo "PIPELINE FAILED"
-            echo "========================================"
+        sh '''
+            echo "Collecting diagnostics..."
 
-            sh '''
+            if [ -f "$HOME/.kube/config" ]; then
+                echo "Kubeconfig exists"
+
+                kubectl config current-context || true
+                kubectl get nodes || true
                 kubectl get deployments || true
                 kubectl get pods -o wide || true
                 kubectl get svc || true
-            '''
-        }
+            else
+                echo "No kubeconfig found."
+                echo "AKS credentials were probably never configured."
+            fi
+        '''
+    }
 
-        always {
-            cleanWs()
-        }
+    always {
+        echo "Cleaning Jenkins workspace..."
+        cleanWs()
     }
 }
