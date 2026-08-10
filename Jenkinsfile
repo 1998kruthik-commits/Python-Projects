@@ -236,76 +236,39 @@ pipeline {
         // ============================================================
 
         stage('Build Docker Images') {
+    parallel {
 
-            parallel {
+        stage('Medical Chatbot') {
+            steps {
+                dir('medical-chatbot') {
+                    sh '''
+                        echo "Building Medical Chatbot"
+                        echo "Image: ${MEDICAL_IMAGE}:${BUILD_TAG}"
 
-
-                // ----------------------------------------------------
-                // MEDICAL CHATBOT
-                // ----------------------------------------------------
-
-                stage('Medical Chatbot') {
-
-                    steps {
-
-                        dir('medical-chatbot') {
-
-                            sh '''
-
-                                echo "========================================"
-                                echo "BUILDING MEDICAL CHATBOT IMAGE"
-                                echo "========================================"
-
-                                echo "Image:"
-                                echo "$MEDICAL_IMAGE"
-
-                                docker build \
-                                    -t "$MEDICAL_IMAGE" \
-                                    .
-
-                                echo ""
-                                echo "Medical chatbot image built successfully."
-
-                                docker images "$MEDICAL_IMAGE"
-                            '''
-                        }
-                    }
-                }
-
-
-                // ----------------------------------------------------
-                // ARRHYTHMIA
-                // ----------------------------------------------------
-
-                stage('Arrhythmia') {
-
-                    steps {
-
-                        dir('Classification of Arrhythmia [ECG DATA]') {
-
-                            sh '''
-
-                                echo "========================================"
-                                echo "BUILDING ARRHYTHMIA IMAGE"
-                                echo "========================================"
-
-                                echo "Image:"
-                                echo "$ARR_IMAGE"
-
-                                docker build \
-                                    -t "$ARR_IMAGE" \
-                                    .
-
-                                echo ""
-                                echo "Arrhythmia image built successfully."
-
-                                docker images "$ARR_IMAGE"
-                            '''
-                        }
-                    }
+                        docker build \
+                            -t ${MEDICAL_IMAGE}:${BUILD_TAG} \
+                            .
+                    '''
                 }
             }
         }
+
+        stage('Arrhythmia') {
+            steps {
+                dir('Classification of Arrhythmia [ECG DATA]') {
+                    sh '''
+                        echo "Building Arrhythmia"
+                        echo "Image: ${ARRHYTHMIA_IMAGE}:${BUILD_TAG}"
+
+                        docker build \
+                            -t ${ARRHYTHMIA_IMAGE}:${BUILD_TAG} \
+                            .
+                    '''
+                }
+            }
+        }
+    }
+}
 
 
         // ============================================================
@@ -361,6 +324,29 @@ pipeline {
                 }
             }
         }
+        
+        stage('Push Images to DockerHub') {
+    steps {
+        withCredentials([
+            usernamePassword(
+                credentialsId: 'dockerhub-creds',
+                usernameVariable: 'DOCKER_USERNAME',
+                passwordVariable: 'DOCKER_PASSWORD'
+            )
+        ]) {
+            sh '''
+                echo "$DOCKER_PASSWORD" | docker login \
+                    -u "$DOCKER_USERNAME" \
+                    --password-stdin
+
+                docker push ${MEDICAL_IMAGE}:${IMAGE_TAG}
+                docker push ${ARRHYTHMIA_IMAGE}:${IMAGE_TAG}
+
+                docker logout
+            '''
+        }
+    }
+}
 
 
         // ============================================================
