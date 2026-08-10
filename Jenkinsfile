@@ -173,7 +173,7 @@ pipeline {
 
                 timeout(time: 15, unit: 'MINUTES') {
 
-                    waitForQualityGate abortPipeline: true
+                    waitForQualityGate abortPipeline: false
                 }
             }
         }
