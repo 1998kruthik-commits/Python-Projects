@@ -14,22 +14,26 @@ pipeline {
         GIT_URL = "https://github.com/1998kruthik-commits/Python-Projects.git"
 
         DOCKER_REPO = "kruthikchethu"
-        BUILD_TAG = "${BUILD_NUMBER}"
 
-        MEDICAL_IMAGE = "${DOCKER_REPO}/medical-chatbot:${BUILD_TAG}"
-        ARR_IMAGE     = "${DOCKER_REPO}/arrhythmia:${BUILD_TAG}"
+        // Jenkins build number = Docker image version
+        IMAGE_VERSION = "0.1"
+
+        // Example:
+        // kruthikchethu/medical-chatbot:25
+        // kruthikchethu/arrhythmia:25
+        MEDICAL_IMAGE = "${DOCKER_REPO}/medical-chatbot:${IMAGE_VERSION}"
+        ARR_IMAGE     = "${DOCKER_REPO}/arrhythmia:${IMAGE_VERSION}"
 
         RESOURCE_GROUP = "MLPython3418"
         AKS_NAME       = "myakcluster"
 
         KEY_VAULT_NAME = "myakcluster"
 
-        SUBSCRIPTION_ID = "f0c66309-7e43-4400-9c2b-4304e2c2a752"
+        SUBSCRIPTION_ID = "f22a3c52-9826-4dbd-ba61-5c0e118462b4"
     }
 
 
     stages {
-
 
         // ============================================================
         // CHECKOUT
@@ -248,7 +252,7 @@ pipeline {
                             sh '''
 
                                 echo "========================================"
-                                echo "BUILDING MEDICAL CHATBOT IMAGE"
+                                echo "BUILDING MEDICAL CHATBOT"
                                 echo "========================================"
 
                                 echo "Image:"
@@ -281,7 +285,7 @@ pipeline {
                             sh '''
 
                                 echo "========================================"
-                                echo "BUILDING ARRHYTHMIA IMAGE"
+                                echo "BUILDING ARRHYTHMIA"
                                 echo "========================================"
 
                                 echo "Image:"
@@ -614,6 +618,7 @@ pipeline {
                     echo "AKS SERVICES"
                     echo "========================================"
 
+
                     kubectl get svc
 
 
@@ -626,9 +631,11 @@ pipeline {
                     echo "WAITING FOR MEDICAL CHATBOT EXTERNAL IP"
                     echo "========================================"
 
+
                     MEDICAL_IP=""
 
-                    for i in {1..30}; do
+
+                    for i in $(seq 1 30); do
 
                         MEDICAL_IP=$(kubectl get svc medical-chatbot-service \
                             -o jsonpath='{.status.loadBalancer.ingress[0].ip}' \
@@ -675,9 +682,11 @@ pipeline {
                     echo "WAITING FOR ARRHYTHMIA EXTERNAL IP"
                     echo "========================================"
 
+
                     ARRHYTHMIA_IP=""
 
-                    for i in {1..30}; do
+
+                    for i in $(seq 1 30); do
 
                         ARRHYTHMIA_IP=$(kubectl get svc arrhythmia-service \
                             -o jsonpath='{.status.loadBalancer.ingress[0].ip}' \
