@@ -29,7 +29,7 @@ pipeline {
 
         KEY_VAULT_NAME = "myakcluster"
 
-        SUBSCRIPTION_ID = "f0c66309-7e43-4400-9c2b-4304e2c2a752"
+        SUBSCRIPTION_ID = "f22a3c52-9826-4dbd-ba61-5c0e118462b4"
     }
 
 
