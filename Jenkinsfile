@@ -15,9 +15,6 @@ pipeline {
 
         DOCKER_REPO = "kruthikchethu"
 
-        // Jenkins build number = Docker image version
-        BUILD_TAG = "${BUILD_NUMBER}"
-
         // Example:
         // kruthikchethu/medical-chatbot:25
         // kruthikchethu/arrhythmia:25
@@ -235,13 +232,38 @@ pipeline {
                 }
             }
         }
-
+        
 
         // ============================================================
         // BUILD DOCKER IMAGES
         // ============================================================
 
         stage('Build Docker Images') {
+
+            steps {
+
+        script {
+
+            // Automatically generate Docker version
+            // Jenkins #18 -> 0.1
+            // Jenkins #19 -> 0.2
+            // Jenkins #20 -> 0.3
+
+            def minorVersion = BUILD_NUMBER.toInteger() - 17
+
+            env.IMAGE_VERSION = "0.${minorVersion}"
+
+            env.MEDICAL_IMAGE =
+                "${DOCKER_REPO}/medical-chatbot:${IMAGE_VERSION}"
+
+            env.ARR_IMAGE =
+                "${DOCKER_REPO}/arrhythmia:${IMAGE_VERSION}"
+
+            echo "Jenkins Build: ${BUILD_NUMBER}"
+            echo "Docker Version: ${IMAGE_VERSION}"
+            echo "Medical Image: ${MEDICAL_IMAGE}"
+            echo "Arrhythmia Image: ${ARR_IMAGE}"
+        }
 
             parallel {
 
