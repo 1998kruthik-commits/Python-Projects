@@ -50,8 +50,6 @@ pipeline {
                 checkout scm
 
                 sh '''
-                    set -e
-
                     echo "Current directory:"
                     pwd
 
@@ -61,7 +59,7 @@ pipeline {
 
                     echo ""
                     echo "Git branch:"
-                    git branch --show-current || true
+                    git branch --show-current
 
                     echo ""
                     echo "Workspace:"
@@ -96,6 +94,7 @@ pipeline {
                     echo "========================================"
 
                     which kubectl || true
+
                     kubectl version --client || true
 
                     echo ""
@@ -104,6 +103,7 @@ pipeline {
                     echo "========================================"
 
                     which az || true
+
                     az version || true
 
                     echo ""
@@ -112,15 +112,8 @@ pipeline {
                     echo "========================================"
 
                     which docker || true
+
                     docker --version || true
-
-                    echo ""
-                    echo "========================================"
-                    echo "KUBELOGIN"
-                    echo "========================================"
-
-                    which kubelogin || true
-                    kubelogin --version || true
                 '''
             }
         }
@@ -184,7 +177,7 @@ pipeline {
 
                 timeout(time: 15, unit: 'MINUTES') {
 
-                    waitForQualityGate abortPipeline: true 
+                    waitForQualityGate abortPipeline: true
                 }
             }
         }
@@ -203,7 +196,7 @@ pipeline {
                     credentialIDOverride: 'azure-sp-jenkins',
 
                     keyVaultURLOverride:
-                        'https://mlpythonproject1.vault.azure.net/',
+                        'https://mlpythonproject.vault.azure.net/',
 
                     azureKeyVaultSecrets: [
 
@@ -245,6 +238,7 @@ pipeline {
 
             parallel {
 
+
                 // ----------------------------------------------------
                 // MEDICAL CHATBOT
                 // ----------------------------------------------------
@@ -257,13 +251,11 @@ pipeline {
 
                             sh '''
 
-                                set -e
-
                                 echo "========================================"
                                 echo "BUILDING MEDICAL CHATBOT"
                                 echo "========================================"
 
-                                echo "Docker image:"
+                                echo "Image:"
                                 echo "$MEDICAL_IMAGE"
 
                                 docker build \
@@ -271,12 +263,9 @@ pipeline {
                                     .
 
                                 echo ""
-                                echo "Medical Chatbot image built successfully."
+                                echo "Medical chatbot image built successfully."
 
-                                echo ""
-                                echo "Checking image:"
-
-                                docker images | grep medical-chatbot || true
+                                docker images "$MEDICAL_IMAGE"
                             '''
                         }
                     }
@@ -295,13 +284,11 @@ pipeline {
 
                             sh '''
 
-                                set -e
-
                                 echo "========================================"
                                 echo "BUILDING ARRHYTHMIA"
                                 echo "========================================"
 
-                                echo "Docker image:"
+                                echo "Image:"
                                 echo "$ARR_IMAGE"
 
                                 docker build \
@@ -311,10 +298,7 @@ pipeline {
                                 echo ""
                                 echo "Arrhythmia image built successfully."
 
-                                echo ""
-                                echo "Checking image:"
-
-                                docker images | grep arrhythmia || true
+                                docker images "$ARR_IMAGE"
                             '''
                         }
                     }
@@ -346,8 +330,6 @@ pipeline {
 
                     sh '''
 
-                        set -e
-
                         echo "========================================"
                         echo "DOCKER HUB LOGIN"
                         echo "========================================"
@@ -360,42 +342,18 @@ pipeline {
                         echo ""
                         echo "Docker login successful."
 
-
                         echo ""
-                        echo "========================================"
-                        echo "PUSHING MEDICAL CHATBOT"
-                        echo "========================================"
-
-                        echo "Image:"
-                        echo "$MEDICAL_IMAGE"
+                        echo "Pushing Medical Chatbot..."
 
                         docker push "$MEDICAL_IMAGE"
 
-
                         echo ""
-                        echo "========================================"
-                        echo "PUSHING ARRHYTHMIA"
-                        echo "========================================"
-
-                        echo "Image:"
-                        echo "$ARR_IMAGE"
+                        echo "Pushing Arrhythmia..."
 
                         docker push "$ARR_IMAGE"
 
-
                         echo ""
-                        echo "========================================"
-                        echo "DOCKER IMAGES PUSHED SUCCESSFULLY"
-                        echo "========================================"
-
-                        echo ""
-                        echo "Medical Chatbot:"
-                        echo "$MEDICAL_IMAGE"
-
-                        echo ""
-                        echo "Arrhythmia:"
-                        echo "$ARR_IMAGE"
-
+                        echo "Docker images pushed successfully."
 
                         docker logout || true
                     '''
@@ -414,8 +372,6 @@ pipeline {
 
                 sh '''
 
-                    set -e
-
                     echo "========================================"
                     echo "UPDATING KUBERNETES MANIFESTS"
                     echo "========================================"
@@ -427,7 +383,6 @@ pipeline {
                     echo ""
                     echo "Arrhythmia image:"
                     echo "$ARR_IMAGE"
-
 
                     echo ""
                     echo "Updating Medical Chatbot manifest..."
@@ -450,17 +405,14 @@ pipeline {
                     echo "UPDATED IMAGES"
                     echo "========================================"
 
-
                     echo ""
                     echo "Medical Chatbot:"
-
                     grep "image:" \
                         k8s/medical-chatbot-deployment.yaml
 
 
                     echo ""
                     echo "Arrhythmia:"
-
                     grep "image:" \
                         k8s/arrhythmia-deployment.yml
                 '''
@@ -507,7 +459,6 @@ pipeline {
 
                         echo "Azure login successful."
 
-
                         echo ""
                         echo "Setting subscription..."
 
@@ -527,76 +478,6 @@ pipeline {
 
 
         // ============================================================
-        // PREPARE AKS TOOLS
-        // ============================================================
-
-        stage('Prepare AKS Tools') {
-
-            steps {
-
-                sh '''
-
-                    set -e
-
-                    echo "========================================"
-                    echo "PREPARING AKS TOOLS"
-                    echo "========================================"
-
-
-                    mkdir -p "$HOME/.local/bin"
-                    mkdir -p "$HOME/.kube"
-
-
-                    echo ""
-                    echo "Installing kubectl and kubelogin if required..."
-
-                    az aks install-cli \
-                        --install-location "$HOME/.local/bin/kubectl" \
-                        --kubelogin-install-location "$HOME/.local/bin/kubelogin" \
-                        || true
-
-
-                    export PATH="$HOME/.local/bin:$PATH"
-
-
-                    echo ""
-                    echo "kubectl:"
-
-                    which kubectl || true
-
-                    kubectl version --client || true
-
-
-                    echo ""
-                    echo "kubelogin:"
-
-                    which kubelogin || true
-
-                    kubelogin --version || true
-
-
-                    if ! command -v kubelogin >/dev/null 2>&1; then
-
-                        echo ""
-                        echo "ERROR: kubelogin is not installed or not in PATH."
-
-                        find "$HOME" \
-                            -name kubelogin \
-                            -type f \
-                            2>/dev/null || true
-
-                        exit 1
-                    fi
-
-
-                    echo ""
-                    echo "AKS tools are ready."
-                '''
-            }
-        }
-
-
-        // ============================================================
         // AKS CREDENTIALS
         // ============================================================
 
@@ -608,40 +489,19 @@ pipeline {
 
                     set -e
 
-                    export PATH="$HOME/.local/bin:$PATH"
-
                     echo "========================================"
                     echo "GETTING AKS CREDENTIALS"
                     echo "========================================"
 
-
-                    echo "Jenkins user:"
-                    whoami
-
-
-                    echo ""
-                    echo "HOME:"
-                    echo "$HOME"
-
-
-                    echo ""
                     echo "Resource Group:"
                     echo "$RESOURCE_GROUP"
 
-
-                    echo ""
                     echo "AKS Cluster:"
                     echo "$AKS_NAME"
 
 
-                    mkdir -p "$HOME/.kube"
-
-                    export KUBECONFIG="$HOME/.kube/config"
-
-
                     echo ""
                     echo "Getting AKS credentials..."
-
 
                     az aks get-credentials \
                         --resource-group "$RESOURCE_GROUP" \
@@ -655,34 +515,13 @@ pipeline {
 
 
                     echo ""
-                    echo "Kubeconfig:"
-
-                    ls -l "$KUBECONFIG"
-
-
-                    echo ""
                     echo "Current Kubernetes context:"
 
                     kubectl config current-context
 
 
                     echo ""
-                    echo "Kubernetes contexts:"
-
-                    kubectl config get-contexts
-
-
-                    echo ""
-                    echo "Converting kubeconfig for Azure CLI authentication..."
-
-
-                    kubelogin convert-kubeconfig \
-                        -l azurecli
-
-
-                    echo ""
                     echo "Testing AKS connection..."
-
 
                     kubectl get nodes
 
@@ -706,25 +545,9 @@ pipeline {
 
                     set -e
 
-                    export PATH="$HOME/.local/bin:$PATH"
-                    export KUBECONFIG="$HOME/.kube/config"
-
-
                     echo "========================================"
                     echo "DEPLOYING TO AKS"
                     echo "========================================"
-
-
-                    echo ""
-                    echo "Deploying Medical Chatbot image:"
-
-                    echo "$MEDICAL_IMAGE"
-
-
-                    echo ""
-                    echo "Deploying Arrhythmia image:"
-
-                    echo "$ARR_IMAGE"
 
 
                     echo ""
@@ -762,9 +585,7 @@ pipeline {
                     echo "DEPLOYMENT STATUS"
                     echo "========================================"
 
-
                     kubectl get deployments
-
 
                     echo ""
                     echo "Pods:"
@@ -793,10 +614,6 @@ pipeline {
 
                     set -e
 
-                    export PATH="$HOME/.local/bin:$PATH"
-                    export KUBECONFIG="$HOME/.kube/config"
-
-
                     echo "========================================"
                     echo "AKS SERVICES"
                     echo "========================================"
@@ -805,9 +622,9 @@ pipeline {
                     kubectl get svc
 
 
-                    # ------------------------------------------------
-                    # MEDICAL CHATBOT
-                    # ------------------------------------------------
+                    // ------------------------------------------------
+                    // MEDICAL CHATBOT
+                    // ------------------------------------------------
 
                     echo ""
                     echo "========================================"
@@ -848,7 +665,6 @@ pipeline {
                         echo "ERROR:"
                         echo "Medical Chatbot External IP was not assigned."
 
-
                         kubectl get svc medical-chatbot-service || true
 
                         kubectl describe svc medical-chatbot-service || true
@@ -857,9 +673,9 @@ pipeline {
                     fi
 
 
-                    # ------------------------------------------------
-                    # ARRHYTHMIA
-                    # ------------------------------------------------
+                    // ------------------------------------------------
+                    // ARRHYTHMIA
+                    // ------------------------------------------------
 
                     echo ""
                     echo "========================================"
@@ -900,7 +716,6 @@ pipeline {
                         echo "ERROR:"
                         echo "Arrhythmia External IP was not assigned."
 
-
                         kubectl get svc arrhythmia-service || true
 
                         kubectl describe svc arrhythmia-service || true
@@ -909,15 +724,14 @@ pipeline {
                     fi
 
 
-                    # ------------------------------------------------
-                    # FINAL URLS
-                    # ------------------------------------------------
+                    // ------------------------------------------------
+                    // FINAL URLS
+                    // ------------------------------------------------
 
                     echo ""
                     echo "========================================"
                     echo "APPLICATION URLS"
                     echo "========================================"
-
 
                     echo ""
                     echo "Medical Chatbot:"
@@ -945,96 +759,46 @@ pipeline {
 
     post {
 
-        success {
+    success {
+        echo "========================================"
+        echo "PIPELINE COMPLETED SUCCESSFULLY"
+        echo "========================================"
 
-            echo "========================================"
-            echo "PIPELINE COMPLETED SUCCESSFULLY"
-            echo "========================================"
+        sh '''
+            echo "Final AKS Status:"
 
-            echo "Medical Image: ${MEDICAL_IMAGE}"
-            echo "Arrhythmia Image: ${ARR_IMAGE}"
+            kubectl get deployments || true
+            kubectl get pods || true
+            kubectl get svc || true
+        '''
+    }
 
-            sh '''
+    failure {
+        echo "========================================"
+        echo "PIPELINE FAILED"
+        echo "========================================"
 
-                export PATH="$HOME/.local/bin:$PATH"
-                export KUBECONFIG="$HOME/.kube/config"
+        sh '''
+            echo "Collecting diagnostics..."
 
-                echo ""
-                echo "Final AKS Status:"
+            if [ -f "$HOME/.kube/config" ]; then
+                echo "Kubeconfig exists"
 
+                kubectl config current-context || true
+                kubectl get nodes || true
                 kubectl get deployments || true
-
-                kubectl get pods || true
-
+                kubectl get pods -o wide || true
                 kubectl get svc || true
-            '''
-        }
+            else
+                echo "No kubeconfig found."
+                echo "AKS credentials were probably never configured."
+            fi
+        '''
+    }
 
-
-        failure {
-
-            echo "========================================"
-            echo "PIPELINE FAILED"
-            echo "========================================"
-
-            sh '''
-
-                export PATH="$HOME/.local/bin:$PATH"
-                export KUBECONFIG="$HOME/.kube/config"
-
-                echo "Collecting diagnostics..."
-
-
-                if [ -f "$HOME/.kube/config" ]; then
-
-                    echo "Kubeconfig exists."
-
-
-                    echo ""
-                    echo "Current context:"
-
-                    kubectl config current-context || true
-
-
-                    echo ""
-                    echo "Nodes:"
-
-                    kubectl get nodes || true
-
-
-                    echo ""
-                    echo "Deployments:"
-
-                    kubectl get deployments || true
-
-
-                    echo ""
-                    echo "Pods:"
-
-                    kubectl get pods -o wide || true
-
-
-                    echo ""
-                    echo "Services:"
-
-                    kubectl get svc || true
-
-                else
-
-                    echo "No kubeconfig found."
-
-                    echo "AKS credentials were probably never configured."
-
-                fi
-            '''
-        }
-
-
-        always {
-
-            echo "Cleaning Jenkins workspace..."
-
-            cleanWs()
-        }
+    always {
+        echo "Cleaning Jenkins workspace..."
+        cleanWs()
     }
 }
+
