@@ -21,8 +21,8 @@ pipeline {
         // Example:
         // kruthikchethu/medical-chatbot:25
         // kruthikchethu/arrhythmia:25
-        MEDICAL_IMAGE = "${DOCKER_REPO}/medical-chatbot:${BUILD_NUMBER}"
-        ARR_IMAGE     = "${DOCKER_REPO}/arrhythmia:${BUILD_NUMBER}"
+        MEDICAL_IMAGE = "${DOCKER_REPO}/medical-chatbot:${IMAGE_VERSION}"
+        ARR_IMAGE     = "${DOCKER_REPO}/arrhythmia:${IMAGE_VERSION}"
 
         RESOURCE_GROUP = "MLPython3418"
         AKS_NAME       = "myakcluster"
