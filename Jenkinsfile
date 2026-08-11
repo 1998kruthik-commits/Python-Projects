@@ -16,7 +16,7 @@ pipeline {
         DOCKER_REPO = "kruthikchethu"
 
         // Jenkins build number = Docker image version
-        BUILD_TAG = "${BUILD_NUMBER}"
+        IMAGE_VERSION = "0.1"
 
         // Example:
         // kruthikchethu/medical-chatbot:25
