@@ -280,91 +280,120 @@ pipeline {
 
         stage('Build Docker Images') {
 
-            steps {
+    steps {
 
-                script {
+        script {
 
-                    // --------------------------------------------------
-                    // AUTOMATIC DOCKER VERSION
-                    //
-                    // Jenkins #18 -> Docker 0.1
-                    // Jenkins #19 -> Docker 0.2
-                    // Jenkins #20 -> Docker 0.3
-                    // --------------------------------------------------
+            // ================================================
+            // AUTOMATIC DOCKER VERSION
+            // Jenkins #18 -> 0.1
+            // Jenkins #19 -> 0.2
+            // Jenkins #20 -> 0.3
+            // ================================================
 
-                    def minorVersion = BUILD_NUMBER.toInteger() - 17
+            def minorVersion = BUILD_NUMBER.toInteger() - 17
 
-                    if (minorVersion < 1) {
-                        minorVersion = 1
-                    }
+            if (minorVersion < 1) {
+                minorVersion = 1
+            }
 
-                    env.IMAGE_VERSION = "0.${minorVersion}"
+            env.IMAGE_VERSION = "0.${minorVersion}"
 
-                    env.MEDICAL_IMAGE =
-                        "${DOCKER_REPO}/medical-chatbot:${IMAGE_VERSION}"
+            env.MEDICAL_IMAGE =
+                "${DOCKER_REPO}/medical-chatbot:${IMAGE_VERSION}"
 
-                    env.ARR_IMAGE =
-                        "${DOCKER_REPO}/arrhythmia:${IMAGE_VERSION}"
+            env.ARR_IMAGE =
+                "${DOCKER_REPO}/arrhythmia:${IMAGE_VERSION}"
 
 
-                    echo "========================================"
-                    echo "DOCKER VERSION"
-                    echo "========================================"
+            echo "========================================"
+            echo "DOCKER VERSION"
+            echo "========================================"
 
-                    echo "Jenkins Build : ${BUILD_NUMBER}"
-                    echo "Docker Version: ${IMAGE_VERSION}"
+            echo "Jenkins Build : ${BUILD_NUMBER}"
+            echo "Docker Version: ${IMAGE_VERSION}"
+
+            echo ""
+            echo "Medical Image:"
+            echo "${MEDICAL_IMAGE}"
+
+            echo ""
+            echo "Arrhythmia Image:"
+            echo "${ARR_IMAGE}"
+
+
+            // ================================================
+            // BUILD MEDICAL CHATBOT
+            // ================================================
+
+            dir('medical-chatbot') {
+
+                sh '''
+                    set -e
 
                     echo ""
-                    echo "Medical Image:"
-                    echo "${MEDICAL_IMAGE}"
+                    echo "========================================"
+                    echo "BUILDING MEDICAL CHATBOT"
+                    echo "========================================"
+
+                    echo "Image:"
+                    echo "$MEDICAL_IMAGE"
+
+                    docker build \
+                        -t "$MEDICAL_IMAGE" \
+                        .
 
                     echo ""
-                    echo "Arrhythmia Image:"
-                    echo "${ARR_IMAGE}"
-                }
+                    echo "Medical Chatbot image built successfully."
+
+                    docker images "$MEDICAL_IMAGE"
+                '''
+            }
 
 
-                parallel {
+            // ================================================
+            // BUILD ARRHYTHMIA
+            // ================================================
 
-                    // ==================================================
-                    // MEDICAL CHATBOT
-                    // ==================================================
+            dir('Classification of Arrhythmia [ECG DATA]') {
 
-                    stage('Medical Chatbot Image') {
+                sh '''
+                    set -e
 
-                        steps {
+                    echo ""
+                    echo "========================================"
+                    echo "BUILDING ARRHYTHMIA"
+                    echo "========================================"
 
-                            dir('medical-chatbot') {
+                    echo "Image:"
+                    echo "$ARR_IMAGE"
 
-                                sh '''
+                    docker build \
+                        -t "$ARR_IMAGE" \
+                        .
 
-                                    set -e
+                    echo ""
+                    echo "Arrhythmia image built successfully."
 
-                                    echo "========================================"
-                                    echo "BUILDING MEDICAL CHATBOT"
-                                    echo "========================================"
-
-                                    echo "Image:"
-                                    echo "$MEDICAL_IMAGE"
-
-
-                                    docker build \
-                                        -t "$MEDICAL_IMAGE" \
-                                        .
-
-
-                                    echo ""
-                                    echo "Medical Chatbot image built successfully."
+                    docker images "$ARR_IMAGE"
+                '''
+            }
 
 
-                                    echo ""
-                                    echo "Docker image:"
+            echo ""
+            echo "========================================"
+            echo "BOTH DOCKER IMAGES BUILT"
+            echo "========================================"
 
-                                    docker images "$MEDICAL_IMAGE"
-                                '''
-                            }
-                        }
-                    }
+            echo "Medical Chatbot:"
+            echo "${MEDICAL_IMAGE}"
+
+            echo ""
+            echo "Arrhythmia:"
+            echo "${ARR_IMAGE}"
+        }
+    }
+}
 
 
                     // ==================================================
