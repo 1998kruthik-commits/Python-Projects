@@ -293,33 +293,32 @@ pipeline {
 
             def minorVersion = BUILD_NUMBER.toInteger() - 17
 
-            if (minorVersion < 1) {
-                minorVersion = 1
-            }
+if (minorVersion < 1) {
+    minorVersion = 1
+}
 
-            env.IMAGE_VERSION = "0.${minorVersion}"
+ env.IMAGE_VERSION = "0.${minorVersion}"
 
-            env.MEDICAL_IMAGE =
-                "${DOCKER_REPO}/medical-chatbot:${IMAGE_VERSION}"
+  env.MEDICAL_IMAGE =
+      "${DOCKER_REPO}/medical-chatbot:${env.IMAGE_VERSION}"
 
-            env.ARR_IMAGE =
-                "${DOCKER_REPO}/arrhythmia:${IMAGE_VERSION}"
+   env.ARR_IMAGE =
+      "${DOCKER_REPO}/arrhythmia:${env.IMAGE_VERSION}"
 
+       echo "IMAGE_VERSION = ${env.IMAGE_VERSION}"
+       echo "MEDICAL_IMAGE = ${env.MEDICAL_IMAGE}"
+       echo "ARR_IMAGE = ${env.ARR_IMAGE}"
 
-            echo "========================================"
-            echo "DOCKER VERSION"
-            echo "========================================"
+       echo "========================================"
+       echo "DOCKER VERSION"
+       echo "========================================"
 
-            echo "Jenkins Build : ${BUILD_NUMBER}"
-            echo "Docker Version: ${IMAGE_VERSION}"
+       echo "Jenkins Build : ${BUILD_NUMBER}"
+       echo "Docker Version: ${env.IMAGE_VERSION}"
 
-            echo ""
-            echo "Medical Image:"
-            echo "${MEDICAL_IMAGE}"
+           echo "${env.MEDICAL_IMAGE}"
 
-            echo ""
-            echo "Arrhythmia Image:"
-            echo "${ARR_IMAGE}"
+           echo "${env.ARR_IMAGE}"
 
 
             // ================================================
