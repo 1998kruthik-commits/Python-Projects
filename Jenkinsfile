@@ -87,7 +87,7 @@ pipeline {
                             echo ""
                             echo "Testing SonarQube connectivity..."
 
-                            curl -f --connect-timeout 10 \\
+                            curl -f --connect-timeout 10 \
                                 "\$SONAR_HOST_URL/api/server/version"
 
                             echo ""
@@ -96,11 +96,11 @@ pipeline {
                             echo ""
                             echo "Running SonarScanner..."
 
-                            ${scannerHome}/bin/sonar-scanner \\
-                                -Dsonar.projectKey=PythonProjects \\
-                                -Dsonar.projectName=PythonProjects \\
-                                -Dsonar.sources=. \\
-                                -Dsonar.sourceEncoding=UTF-8 \\
+                            ${scannerHome}/bin/sonar-scanner \
+                                -Dsonar.projectKey=PythonProjects \
+                                -Dsonar.projectName=PythonProjects \
+                                -Dsonar.sources=. \
+                                -Dsonar.sourceEncoding=UTF-8 \
                                 -Dsonar.python.version=3.12
                         """
                     }
@@ -186,10 +186,6 @@ pipeline {
                         az account show -o table
 
 
-                        # ==================================================
-                        # AKS TOOLS
-                        # ==================================================
-
                         echo ""
                         echo "========================================"
                         echo "PREPARING AKS TOOLS"
@@ -226,10 +222,6 @@ pipeline {
 
                         fi
 
-
-                        # ==================================================
-                        # AKS CREDENTIALS
-                        # ==================================================
 
                         echo ""
                         echo "========================================"
@@ -268,6 +260,7 @@ pipeline {
 
                         echo ""
                         echo "AKS connection successful."
+
                     '''
                 }
             }
@@ -280,160 +273,125 @@ pipeline {
 
         stage('Build Docker Images') {
 
-    steps {
+            steps {
 
-        script {
-
-            // ================================================
-            // AUTOMATIC DOCKER VERSION
-            // Jenkins #18 -> 0.1
-            // Jenkins #19 -> 0.2
-            // Jenkins #20 -> 0.3
-            // ================================================
-
-            def minorVersion = BUILD_NUMBER.toInteger() - 17
-
-if (minorVersion < 1) {
-    minorVersion = 1
-}
-
- env.IMAGE_VERSION = "0.${minorVersion}"
-
-  env.MEDICAL_IMAGE =
-      "${DOCKER_REPO}/medical-chatbot:${env.IMAGE_VERSION}"
-
-   env.ARR_IMAGE =
-      "${DOCKER_REPO}/arrhythmia:${env.IMAGE_VERSION}"
-
-       echo "IMAGE_VERSION = ${env.IMAGE_VERSION}"
-       echo "MEDICAL_IMAGE = ${env.MEDICAL_IMAGE}"
-       echo "ARR_IMAGE = ${env.ARR_IMAGE}"
-
-       echo "========================================"
-       echo "DOCKER VERSION"
-       echo "========================================"
-
-       echo "Jenkins Build : ${BUILD_NUMBER}"
-       echo "Docker Version: ${env.IMAGE_VERSION}"
-
-           echo "${env.MEDICAL_IMAGE}"
-
-           echo "${env.ARR_IMAGE}"
-
-
-            // ================================================
-            // BUILD MEDICAL CHATBOT
-            // ================================================
-
-            dir('medical-chatbot') {
-
-                sh '''
-                    set -e
-
-                    echo ""
-                    echo "========================================"
-                    echo "BUILDING MEDICAL CHATBOT"
-                    echo "========================================"
-
-                    echo "Image:"
-                    echo "$MEDICAL_IMAGE"
-
-                    docker build \
-                        -t "$MEDICAL_IMAGE" \
-                        .
-
-                    echo ""
-                    echo "Medical Chatbot image built successfully."
-
-                    docker images "$MEDICAL_IMAGE"
-                '''
-            }
-
-
-            // ================================================
-            // BUILD ARRHYTHMIA
-            // ================================================
-
-            dir('Classification of Arrhythmia [ECG DATA]') {
-
-                sh '''
-                    set -e
-
-                    echo ""
-                    echo "========================================"
-                    echo "BUILDING ARRHYTHMIA"
-                    echo "========================================"
-
-                    echo "Image:"
-                    echo "$ARR_IMAGE"
-
-                    docker build \
-                        -t "$ARR_IMAGE" \
-                        .
-
-                    echo ""
-                    echo "Arrhythmia image built successfully."
-
-                    docker images "$ARR_IMAGE"
-                '''
-            }
-
-
-            echo ""
-            echo "========================================"
-            echo "BOTH DOCKER IMAGES BUILT"
-            echo "========================================"
-
-            echo "Medical Chatbot:"
-            echo "${MEDICAL_IMAGE}"
-
-            echo ""
-            echo "Arrhythmia:"
-            echo "${ARR_IMAGE}"
-        }
-    }
-}
-
+                script {
 
                     // ==================================================
-                    // ARRHYTHMIA
+                    // AUTOMATIC DOCKER VERSION
+                    //
+                    // Jenkins #18 -> 0.1
+                    // Jenkins #19 -> 0.2
+                    // Jenkins #20 -> 0.3
                     // ==================================================
 
-                    stage('Arrhythmia Image') {
+                    def minorVersion = BUILD_NUMBER.toInteger() - 17
 
-                        steps {
-
-                            dir('Classification of Arrhythmia [ECG DATA]') {
-
-                                sh '''
-
-                                    set -e
-
-                                    echo "========================================"
-                                    echo "BUILDING ARRHYTHMIA"
-                                    echo "========================================"
-
-                                    echo "Image:"
-                                    echo "$ARR_IMAGE"
-
-
-                                    docker build \
-                                        -t "$ARR_IMAGE" \
-                                        .
-
-
-                                    echo ""
-                                    echo "Arrhythmia image built successfully."
-
-
-                                    echo ""
-                                    echo "Docker image:"
-
-                                    docker images "$ARR_IMAGE"
-                                '''
-                            }
-                        }
+                    if (minorVersion < 1) {
+                        minorVersion = 1
                     }
+
+                    env.IMAGE_VERSION = "0.${minorVersion}"
+
+                    env.MEDICAL_IMAGE =
+                        "${DOCKER_REPO}/medical-chatbot:${env.IMAGE_VERSION}"
+
+                    env.ARR_IMAGE =
+                        "${DOCKER_REPO}/arrhythmia:${env.IMAGE_VERSION}"
+
+
+                    echo "========================================"
+                    echo "DOCKER VERSION"
+                    echo "========================================"
+
+                    echo "Jenkins Build : ${BUILD_NUMBER}"
+                    echo "Docker Version: ${env.IMAGE_VERSION}"
+
+                    echo ""
+                    echo "Medical Image:"
+                    echo "${env.MEDICAL_IMAGE}"
+
+                    echo ""
+                    echo "Arrhythmia Image:"
+                    echo "${env.ARR_IMAGE}"
+
+
+                    // ==================================================
+                    // BUILD MEDICAL CHATBOT
+                    // ==================================================
+
+                    dir('medical-chatbot') {
+
+                        sh '''
+                            set -e
+
+                            echo ""
+                            echo "========================================"
+                            echo "BUILDING MEDICAL CHATBOT"
+                            echo "========================================"
+
+                            echo "Image:"
+                            echo "$MEDICAL_IMAGE"
+
+                            docker build \
+                                -t "$MEDICAL_IMAGE" \
+                                .
+
+                            echo ""
+                            echo "Medical Chatbot image built successfully."
+
+                            echo ""
+                            echo "Docker image:"
+
+                            docker images "$MEDICAL_IMAGE"
+                        '''
+                    }
+
+
+                    // ==================================================
+                    // BUILD ARRHYTHMIA
+                    // ==================================================
+
+                    dir('Classification of Arrhythmia [ECG DATA]') {
+
+                        sh '''
+                            set -e
+
+                            echo ""
+                            echo "========================================"
+                            echo "BUILDING ARRHYTHMIA"
+                            echo "========================================"
+
+                            echo "Image:"
+                            echo "$ARR_IMAGE"
+
+                            docker build \
+                                -t "$ARR_IMAGE" \
+                                .
+
+                            echo ""
+                            echo "Arrhythmia image built successfully."
+
+                            echo ""
+                            echo "Docker image:"
+
+                            docker images "$ARR_IMAGE"
+                        '''
+                    }
+
+
+                    echo ""
+                    echo "========================================"
+                    echo "BOTH DOCKER IMAGES BUILT"
+                    echo "========================================"
+
+                    echo ""
+                    echo "Medical Chatbot:"
+                    echo "${env.MEDICAL_IMAGE}"
+
+                    echo ""
+                    echo "Arrhythmia:"
+                    echo "${env.ARR_IMAGE}"
                 }
             }
         }
@@ -477,6 +435,10 @@ if (minorVersion < 1) {
                         echo "Docker login successful."
 
 
+                        // ==================================================
+                        // PUSH MEDICAL CHATBOT
+                        // ==================================================
+
                         echo ""
                         echo "========================================"
                         echo "PUSHING MEDICAL CHATBOT"
@@ -486,6 +448,10 @@ if (minorVersion < 1) {
 
                         docker push "$MEDICAL_IMAGE"
 
+
+                        // ==================================================
+                        // PUSH ARRHYTHMIA
+                        // ==================================================
 
                         echo ""
                         echo "========================================"
@@ -497,12 +463,15 @@ if (minorVersion < 1) {
                         docker push "$ARR_IMAGE"
 
 
+                        echo ""
+                        echo "Logging out from Docker Hub..."
+
                         docker logout || true
 
 
-                        # ==================================================
-                        # UPDATE KUBERNETES
-                        # ==================================================
+                        // ==================================================
+                        // UPDATE KUBERNETES MANIFESTS
+                        // ==================================================
 
                         echo ""
                         echo "========================================"
@@ -548,6 +517,7 @@ if (minorVersion < 1) {
 
                         grep "image:" \
                             k8s/arrhythmia-deployment.yml
+
                     '''
                 }
             }
@@ -674,6 +644,7 @@ if (minorVersion < 1) {
                         echo "Services:"
 
                         kubectl get svc
+
                     '''
                 }
             }
@@ -719,9 +690,9 @@ if (minorVersion < 1) {
                     kubectl get svc
 
 
-                    # ==================================================
-                    # MEDICAL CHATBOT
-                    # ==================================================
+                    // ==================================================
+                    // MEDICAL CHATBOT
+                    // ==================================================
 
                     echo ""
                     echo "========================================"
@@ -767,9 +738,9 @@ if (minorVersion < 1) {
                     fi
 
 
-                    # ==================================================
-                    # ARRHYTHMIA
-                    # ==================================================
+                    // ==================================================
+                    // ARRHYTHMIA
+                    // ==================================================
 
                     echo ""
                     echo "========================================"
@@ -815,9 +786,9 @@ if (minorVersion < 1) {
                     fi
 
 
-                    # ==================================================
-                    # FINAL APPLICATION URLS
-                    # ==================================================
+                    // ==================================================
+                    // FINAL APPLICATION URLS
+                    // ==================================================
 
                     echo ""
                     echo "========================================"
@@ -839,6 +810,7 @@ if (minorVersion < 1) {
                     echo "========================================"
                     echo "AKS HEALTH CHECK PASSED"
                     echo "========================================"
+
                 '''
             }
         }
@@ -878,6 +850,7 @@ if (minorVersion < 1) {
                 kubectl get pods || true
 
                 kubectl get svc || true
+
             '''
         }
 
@@ -934,6 +907,7 @@ if (minorVersion < 1) {
                     echo "Kubeconfig not found."
 
                 fi
+
             '''
         }
 
